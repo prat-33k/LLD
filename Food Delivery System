@@ -1,0 +1,300 @@
+Food delivery system.
+
+// FoodDeliverySystem.java - Full implementation with Facade and Strategy Pattern
+
+import java.util.*;
+
+// --- Entities ---
+class User {
+    private String name;
+    private String address;
+    private int location;
+
+    public User(String name, String address, int location) {
+        this.name = name;
+        this.address = address;
+        this.location = location;
+    }
+
+    public int getLocation() {
+        return location;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+class MenuItem {
+    private String name;
+    private double price;
+
+    public MenuItem(String name, double price) {
+        this.name = name;
+        this.price = price;
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+class Restaurant {
+    private String name;
+    private List<MenuItem> menu;
+    private int location;
+
+    public Restaurant(String name, int location) {
+        this.name = name;
+        this.location = location;
+        this.menu = new ArrayList<>();
+    }
+
+    public void addMenuItem(MenuItem item) {
+        menu.add(item);
+    }
+
+    public List<MenuItem> getMenu() {
+        return menu;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getLocation() {
+        return location;
+    }
+}
+
+class Order {
+    private User user;
+    private Restaurant restaurant;
+    private List<MenuItem> items;
+    private double totalBill;
+
+    public Order(User user, Restaurant restaurant, List<MenuItem> items) {
+        this.user = user;
+        this.restaurant = restaurant;
+        this.items = items;
+        this.totalBill = calculateBill();
+    }
+
+    private double calculateBill() {
+        return items.stream().mapToDouble(MenuItem::getPrice).sum();
+    }
+
+    public double getTotalBill() {
+        return totalBill;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public Restaurant getRestaurant() {
+        return restaurant;
+    }
+}
+
+class DeliveryPerson {
+    private String name;
+    private int location;
+    private boolean available;
+
+    public DeliveryPerson(String name, int location) {
+        this.name = name;
+        this.location = location;
+        this.available = true;
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    public void assignDelivery() {
+        available = false;
+    }
+
+    public void completeDelivery() {
+        available = true;
+    }
+
+    public int getLocation() {
+        return location;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+// --- Strategy Pattern ---
+interface PaymentStrategy {
+    boolean pay(double amount);
+}
+
+class CreditCardPayment implements PaymentStrategy {
+    public boolean pay(double amount) {
+        System.out.println("Paid ₹" + amount + " using Credit Card.");
+        return true;
+    }
+}
+
+class UPIPayment implements PaymentStrategy {
+    public boolean pay(double amount) {
+        System.out.println("Paid ₹" + amount + " using UPI.");
+        return true;
+    }
+}
+
+class PaymentService {
+    private PaymentStrategy strategy;
+
+    public PaymentService(PaymentStrategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public boolean pay(double amount) {
+        return strategy.pay(amount);
+    }
+}
+
+// --- Singleton Delivery Service ---
+class DeliveryService {
+    private static DeliveryService instance;
+    private List<DeliveryPerson> deliveryPeople;
+
+    private DeliveryService() {
+        this.deliveryPeople = new ArrayList<>();
+    }
+
+    public static DeliveryService getInstance() {
+        if (instance == null) {
+            instance = new DeliveryService();
+        }
+        return instance;
+    }
+
+    public void addDeliveryPerson(DeliveryPerson dp) {
+        deliveryPeople.add(dp);
+    }
+
+    public DeliveryPerson assignDelivery(int userLocation) {
+        DeliveryPerson nearest = null;
+        int minDistance = Integer.MAX_VALUE;
+
+        for (DeliveryPerson dp : deliveryPeople) {
+            if (dp.isAvailable()) {
+                int distance = Math.abs(dp.getLocation() - userLocation);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearest = dp;
+                }
+            }
+        }
+
+        if (nearest != null) {
+            nearest.assignDelivery();
+            System.out.println("Delivery assigned to: " + nearest.getName());
+        } else {
+            System.out.println("No delivery person available at the moment.");
+        }
+
+        return nearest;
+    }
+
+    public void completeDelivery(DeliveryPerson dp) {
+        if (dp != null) {
+            dp.completeDelivery();
+            System.out.println("Delivery completed by: " + dp.getName());
+        }
+    }
+}
+
+// --- Facade ---
+class FoodDeliveryFacade {
+    private DeliveryService deliveryService;
+    private List<Restaurant> restaurants;
+
+    public FoodDeliveryFacade() {
+        this.deliveryService = DeliveryService.getInstance();
+        this.restaurants = new ArrayList<>();
+
+        setupRestaurants();
+        setupDeliveryPeople();
+    }
+
+    private void setupRestaurants() {
+        Restaurant rest1 = new Restaurant("Tandoori Treats", 3);
+        rest1.addMenuItem(new MenuItem("Paneer Tikka", 180));
+        rest1.addMenuItem(new MenuItem("Butter Naan", 40));
+        restaurants.add(rest1);
+
+        Restaurant rest2 = new Restaurant("Burger Bites", 7);
+        rest2.addMenuItem(new MenuItem("Cheese Burger", 120));
+        rest2.addMenuItem(new MenuItem("Fries", 60));
+        restaurants.add(rest2);
+    }
+
+    private void setupDeliveryPeople() {
+        deliveryService.addDeliveryPerson(new DeliveryPerson("Arjun", 4));
+        deliveryService.addDeliveryPerson(new DeliveryPerson("Sneha", 8));
+    }
+
+    public void placeOrder(User user, int restaurantIndex, List<Integer> menuItemIndexes, PaymentStrategy paymentMethod) {
+        Restaurant restaurant = restaurants.get(restaurantIndex);
+        List<MenuItem> selectedItems = new ArrayList<>();
+        for (int idx : menuItemIndexes) {
+            selectedItems.add(restaurant.getMenu().get(idx));
+        }
+
+        Order order = new Order(user, restaurant, selectedItems);
+        System.out.println("\nPlacing order for " + user.getName() + " from " + restaurant.getName());
+        for (MenuItem item : selectedItems) {
+            System.out.println("- " + item.getName() + ": ₹" + item.getPrice());
+        }
+        System.out.println("Total Bill: ₹" + order.getTotalBill());
+
+        PaymentService paymentService = new PaymentService(paymentMethod);
+        if (paymentService.pay(order.getTotalBill())) {
+            DeliveryPerson assigned = deliveryService.assignDelivery(user.getLocation());
+            deliveryService.completeDelivery(assigned);
+        }
+    }
+
+    public List<Restaurant> getAvailableRestaurants() {
+        return restaurants;
+    }
+}
+
+// --- Main Driver ---
+public class FoodDeliverySystem {
+    public static void main(String[] args) {
+        FoodDeliveryFacade facade = new FoodDeliveryFacade();
+
+        User user = new User("Ravi", "Sector 21", 5);
+
+        List<Restaurant> restaurants = facade.getAvailableRestaurants();
+        System.out.println("Available Restaurants:");
+        for (int i = 0; i < restaurants.size(); i++) {
+            System.out.println((i + 1) + ". " + restaurants.get(i).getName());
+        }
+
+        int selectedRestaurantIndex = 0; // Tandoori Treats
+        List<Integer> selectedMenuItems = Arrays.asList(0, 1); // Paneer Tikka, Butter Naan
+        PaymentStrategy paymentMethod = new UPIPayment();
+
+        facade.placeOrder(user, selectedRestaurantIndex, selectedMenuItems, paymentMethod);
+    }
+}
+
+
+
+
+
+
