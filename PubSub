@@ -1,0 +1,623 @@
+/**
+ * A Publisher-Subscriber (Pub-Sub) System in Java
+ * 
+ * Features:
+ * - Topic-based messaging
+ * - Thread-safe concurrent operations
+ * - Asynchronous message delivery
+ * - Support for multiple publishers and subscribers
+ * - Real-time message delivery
+ * - Scalable architecture
+ */
+
+import java.util.Map;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.time.Instant;
+
+/**
+ * Represents a message in the pub-sub system
+ */
+class Message {
+    private final String id;
+    private final Object content;
+    private final Map<String, Object> headers;
+    private final Instant timestamp;
+    
+    public Message(Object content) {
+        this(content, Collections.emptyMap());
+    }
+    
+    public Message(Object content, Map<String, Object> headers) {
+        this.id = UUID.randomUUID().toString();
+        this.content = content;
+        this.headers = new ConcurrentHashMap<>(headers);
+        this.timestamp = Instant.now();
+    }
+    
+    public String getId() {
+        return id;
+    }
+    
+    public Object getContent() {
+        return content;
+    }
+    
+    public Map<String, Object> getHeaders() {
+        return Collections.unmodifiableMap(headers);
+    }
+    
+    public Instant getTimestamp() {
+        return timestamp;
+    }
+    
+    @Override
+    public String toString() {
+        return "Message{" +
+                "id='" + id + '\'' +
+                ", content=" + content +
+                ", timestamp=" + timestamp +
+                '}';
+    }
+}
+
+/**
+ * Interface for subscribers to receive messages
+ */
+interface Subscriber {
+    /**
+     * Called when a message is received on a subscribed topic
+     * @param topic The topic the message was published to
+     * @param message The message that was published
+     */
+    void onMessage(String topic, Message message);
+}
+
+/**
+ * Publisher interface for publishing messages to topics
+ */
+interface Publisher {
+    /**
+     * Publish a message to a specific topic
+     * @param topic The topic to publish to
+     * @param message The message to publish
+     */
+    void publish(String topic, Message message);
+}
+
+/**
+ * Topic class that manages subscribers and message delivery for a specific topic
+ */
+class Topic {
+    private final String name;
+    private final List<Subscriber> subscribers;
+    private final BlockingQueue<Message> messageQueue;
+    private final ExecutorService deliveryExecutor;
+    private volatile boolean active = true;
+    
+    public Topic(String name) {
+        this.name = name;
+        this.subscribers = new CopyOnWriteArrayList<>();
+        this.messageQueue = new LinkedBlockingQueue<>();
+        this.deliveryExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "topic-" + name + "-delivery");
+            t.setDaemon(true);
+            return t;
+        });
+        
+        // Start message processing
+        startMessageProcessing();
+    }
+    
+    private void startMessageProcessing() {
+        deliveryExecutor.submit(() -> {
+            while (active) {
+                try {
+                    Message message = messageQueue.take();
+                    deliverMessage(message);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    System.err.println("Error processing message in topic " + name + ": " + e.getMessage());
+                }
+            }
+        });
+    }
+    
+    public void addSubscriber(Subscriber subscriber) {
+        subscribers.add(subscriber);
+    }
+    
+    public void removeSubscriber(Subscriber subscriber) {
+        subscribers.remove(subscriber);
+    }
+    
+    public void publishMessage(Message message) {
+        if (!active) {
+            throw new IllegalStateException("Topic is not active");
+        }
+        messageQueue.offer(message);
+    }
+    
+    private void deliverMessage(Message message) {
+        for (Subscriber subscriber : subscribers) {
+            try {
+                // Deliver message to each subscriber
+                subscriber.onMessage(name, message);
+            } catch (Exception e) {
+                System.err.println("Error delivering message to subscriber: " + e.getMessage());
+                // Continue delivering to other subscribers even if one fails
+            }
+        }
+    }
+    
+    public void shutdown() {
+        active = false;
+        deliveryExecutor.shutdownNow();
+    }
+    
+    public int getSubscriberCount() {
+        return subscribers.size();
+    }
+    
+    public String getName() {
+        return name;
+    }
+}
+
+/**
+ * Central Pub-Sub system that manages topics, publishers, and subscribers
+ */
+class PubSubSystem implements Publisher {
+    private final Map<String, Topic> topics;
+    private final ExecutorService managerExecutor;
+    
+    public PubSubSystem() {
+        this.topics = new ConcurrentHashMap<>();
+        this.managerExecutor = Executors.newCachedThreadPool();
+    }
+    
+    /**
+     * Create a new topic
+     * @param topicName The name of the topic to create
+     * @return true if the topic was created, false if it already existed
+     */
+    public boolean createTopic(String topicName) {
+        if (topics.containsKey(topicName)) {
+            return false;
+        }
+        
+        topics.putIfAbsent(topicName, new Topic(topicName));
+        return true;
+    }
+    
+    /**
+     * Remove a topic and notify all subscribers
+     * @param topicName The name of the topic to remove
+     * @return true if the topic was removed, false if it didn't exist
+     */
+    public boolean removeTopic(String topicName) {
+        Topic topic = topics.remove(topicName);
+        if (topic != null) {
+            topic.shutdown();
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Subscribe to a topic
+     * @param topicName The name of the topic to subscribe to
+     * @param subscriber The subscriber instance
+     * @return true if the subscription was successful
+     */
+    public boolean subscribe(String topicName, Subscriber subscriber) {
+        // Create topic if it doesn't exist
+        Topic topic = topics.computeIfAbsent(topicName, Topic::new);
+        topic.addSubscriber(subscriber);
+        return true;
+    }
+    
+    /**
+     * Unsubscribe from a topic
+     * @param topicName The name of the topic to unsubscribe from
+     * @param subscriber The subscriber instance
+     * @return true if the unsubscription was successful
+     */
+    public boolean unsubscribe(String topicName, Subscriber subscriber) {
+        Topic topic = topics.get(topicName);
+        if (topic != null) {
+            topic.removeSubscriber(subscriber);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Publish a message to a topic
+     * @param topicName The name of the topic to publish to
+     * @param message The message to publish
+     */
+    @Override
+    public void publish(String topicName, Message message) {
+        Topic topic = topics.get(topicName);
+        if (topic == null) {
+            // Auto-create topic if it doesn't exist
+            topic = topics.computeIfAbsent(topicName, Topic::new);
+        }
+        
+        // Use the manager executor to avoid blocking the caller
+        managerExecutor.execute(() -> topic.publishMessage(message));
+    }
+    
+    /**
+     * Get the number of subscribers for a topic
+     * @param topicName The name of the topic
+     * @return The number of subscribers, or 0 if the topic doesn't exist
+     */
+    public int getSubscriberCount(String topicName) {
+        Topic topic = topics.get(topicName);
+        return topic != null ? topic.getSubscriberCount() : 0;
+    }
+    
+    /**
+     * Shutdown the Pub-Sub system
+     */
+    public void shutdown() {
+        for (Topic topic : topics.values()) {
+            topic.shutdown();
+        }
+        managerExecutor.shutdownNow();
+    }
+}
+
+/**
+ * Simple publisher implementation
+ */
+class SimplePublisher implements Publisher {
+    private final PubSubSystem pubSubSystem;
+    private final String publisherId;
+    
+    public SimplePublisher(PubSubSystem pubSubSystem) {
+        this.pubSubSystem = pubSubSystem;
+        this.publisherId = UUID.randomUUID().toString();
+    }
+    
+    @Override
+    public void publish(String topic, Message message) {
+        // Add publisher ID to message headers
+        message.getHeaders().put("publisherId", publisherId);
+        pubSubSystem.publish(topic, message);
+    }
+}
+
+/**
+ * Example subscriber implementation
+ */
+class LoggingSubscriber implements Subscriber {
+    private final String name;
+    
+    public LoggingSubscriber(String name) {
+        this.name = name;
+    }
+    
+    @Override
+    public void onMessage(String topic, Message message) {
+        System.out.println("[" + name + "] Received message on topic '" + topic + "': " + message);
+    }
+}
+
+/**
+ * Example usage of the Pub-Sub system
+ */
+public class PubSubExample {
+    public static void main(String[] args) throws Exception {
+        // Create the Pub-Sub system
+        PubSubSystem pubSubSystem = new PubSubSystem();
+        
+        // Create topics
+        pubSubSystem.createTopic("sports");
+        pubSubSystem.createTopic("tech");
+        pubSubSystem.createTopic("finance");
+        
+        // Create subscribers
+        Subscriber sportsSubscriber = new LoggingSubscriber("SportsSubscriber");
+        Subscriber techSubscriber = new LoggingSubscriber("TechSubscriber");
+        Subscriber allTopicsSubscriber = new LoggingSubscriber("AllTopicsSubscriber");
+        
+        // Subscribe to topics
+        pubSubSystem.subscribe("sports", sportsSubscriber);
+        pubSubSystem.subscribe("sports", allTopicsSubscriber);
+        pubSubSystem.subscribe("tech", techSubscriber);
+        pubSubSystem.subscribe("tech", allTopicsSubscriber);
+        pubSubSystem.subscribe("finance", allTopicsSubscriber);
+        
+        // Create publishers
+        Publisher sportsPublisher = new SimplePublisher(pubSubSystem);
+        Publisher techPublisher = new SimplePublisher(pubSubSystem);
+        Publisher financePublisher = new SimplePublisher(pubSubSystem);
+        
+        // Publish messages
+        sportsPublisher.publish("sports", new Message("Breaking: New world record in marathon!"));
+        techPublisher.publish("tech", new Message("New smartphone announced with revolutionary features"));
+        financePublisher.publish("finance", new Message("Stock market reaches all-time high"));
+        
+        // Give some time for messages to be delivered
+        Thread.sleep(1000);
+        
+        // Demonstrate unsubscribing
+        System.out.println("\nUnsubscribing AllTopicsSubscriber from sports...");
+        pubSubSystem.unsubscribe("sports", allTopicsSubscriber);
+        
+        // Publish more messages
+        sportsPublisher.publish("sports", new Message("Local team wins championship"));
+        
+        // Give some time for messages to be delivered
+        Thread.sleep(1000);
+        
+        // Shutdown the system
+        System.out.println("\nShutting down Pub-Sub system...");
+        pubSubSystem.shutdown();
+    }
+}
+
+/**
+ * Enhanced version with additional features:
+ * 
+ * 1. Message filtering capabilities
+ */
+interface MessageFilter {
+    boolean matches(Message message);
+}
+
+class HeaderFilter implements MessageFilter {
+    private final String headerName;
+    private final Object headerValue;
+    
+    public HeaderFilter(String headerName, Object headerValue) {
+        this.headerName = headerName;
+        this.headerValue = headerValue;
+    }
+    
+    @Override
+    public boolean matches(Message message) {
+        return headerValue.equals(message.getHeaders().get(headerName));
+    }
+}
+
+class FilteredSubscriber implements Subscriber {
+    private final Subscriber delegate;
+    private final List<MessageFilter> filters = new CopyOnWriteArrayList<>();
+    
+    public FilteredSubscriber(Subscriber delegate) {
+        this.delegate = delegate;
+    }
+    
+    public void addFilter(MessageFilter filter) {
+        filters.add(filter);
+    }
+    
+    public void removeFilter(MessageFilter filter) {
+        filters.remove(filter);
+    }
+    
+    @Override
+    public void onMessage(String topic, Message message) {
+        if (shouldDeliver(message)) {
+            delegate.onMessage(topic, message);
+        }
+    }
+    
+    private boolean shouldDeliver(Message message) {
+        if (filters.isEmpty()) {
+            return true; // No filters means deliver all messages
+        }
+        
+        for (MessageFilter filter : filters) {
+            if (!filter.matches(message)) {
+                return false; // If any filter doesn't match, don't deliver
+            }
+        }
+        
+        return true; // All filters matched
+    }
+}
+
+/**
+ * Example of using the enhanced features
+ */
+class EnhancedPubSubExample {
+    public static void main(String[] args) throws Exception {
+        // Create the Pub-Sub system
+        PubSubSystem pubSubSystem = new PubSubSystem();
+        
+        // Create topic
+        pubSubSystem.createTopic("news");
+        
+        // Create basic subscriber
+        Subscriber baseSubscriber = new LoggingSubscriber("FilteredNewsSubscriber");
+        
+        // Create filtered subscriber that only receives messages with priority = "high"
+        FilteredSubscriber filteredSubscriber = new FilteredSubscriber(baseSubscriber);
+        filteredSubscriber.addFilter(new HeaderFilter("priority", "high"));
+        
+        // Subscribe to the topic
+        pubSubSystem.subscribe("news", filteredSubscriber);
+        
+        // Create publisher
+        Publisher newsPublisher = new SimplePublisher(pubSubSystem);
+        
+        // Publish messages with different priorities
+        Map<String, Object> highPriorityHeaders = new ConcurrentHashMap<>();
+        highPriorityHeaders.put("priority", "high");
+        
+        Map<String, Object> lowPriorityHeaders = new ConcurrentHashMap<>();
+        lowPriorityHeaders.put("priority", "low");
+        
+        System.out.println("\nPublishing messages with different priorities...");
+        newsPublisher.publish("news", new Message("Breaking News: Important Event!", highPriorityHeaders));
+        newsPublisher.publish("news", new Message("Regular News: Daily Update", lowPriorityHeaders));
+        
+        // Give some time for messages to be delivered
+        Thread.sleep(1000);
+        
+        // Shutdown the system
+        System.out.println("\nShutting down Enhanced Pub-Sub system...");
+        pubSubSystem.shutdown();
+    }
+}
+
+
+Expected Interview Cross-Questioning for Pub-Sub System Design
+When presenting this Pub-Sub system design in an interview, expect the interviewer to probe deeper into your understanding, design choices, and the system's capabilities. Here are the likely cross-questions categorized by area:
+System Scalability and Performance
+
+Message Volume Handling: "How would your system handle millions of messages per second?"
+
+Discuss sharding topics, optimizing thread pools, and potentially introducing a distributed architecture.
+
+
+Memory Management: "What happens if messages are produced faster than they're consumed?"
+
+Explain backpressure mechanisms, bounded queues, and potential disk offloading strategies.
+
+
+Producer/Subscriber Scaling: "How does your system scale with thousands of publishers or subscribers?"
+
+Address connection pooling, subscriber groups, and fan-out optimization.
+
+
+Bottleneck Identification: "What's the main bottleneck in your design and how would you address it?"
+
+Discuss message queue limitations, thread pool sizing, and network I/O constraints.
+
+
+
+Reliability and Fault Tolerance
+
+Message Persistence: "What happens to in-flight messages if the system crashes?"
+
+Explain options for disk persistence, write-ahead logs, and recovery mechanisms.
+
+
+Guaranteed Delivery: "How would you ensure messages are never lost?"
+
+Discuss acknowledgments, redelivery mechanisms, and persistence strategies.
+
+
+Subscriber Failures: "What if a subscriber crashes while processing a message?"
+
+Address retry policies, dead-letter queues, and poison message handling.
+
+
+System Outages: "How would you make the system highly available?"
+
+Explain replication, leader election, and distributed consensus approaches.
+
+
+
+Consistency and Ordering
+
+Message Ordering: "Does your system guarantee message ordering? If not, how would you implement it?"
+
+Discuss sequence numbers, partitioning strategies, and ordering trade-offs.
+
+
+Exactly-Once Delivery: "How would you implement exactly-once semantics?"
+
+Explain idempotent operations, deduplication strategies, and transaction IDs.
+
+
+Consistency Model: "What consistency guarantees does your system provide?"
+
+Discuss eventual consistency, causality, and distributed system implications.
+
+
+
+Implementation Details
+
+Thread Pool Sizing: "How would you determine the optimal thread pool size?"
+
+Explain Little's Law, monitoring, and adaptive sizing strategies.
+
+
+Memory Footprint: "How much memory would your system consume with X topics and Y subscribers?"
+
+Discuss memory calculations, object overhead, and garbage collection implications.
+
+
+Concurrency Challenges: "What synchronization issues might arise in your design?"
+
+Address race conditions, deadlocks, and how your design prevents them.
+
+
+Error Handling: "What happens if a message can't be delivered after multiple attempts?"
+
+Explain dead-letter queues, error logging, and administrator alerts.
+
+
+
+Extensions and Real-World Considerations
+
+Multi-Datacenter Support: "How would you extend this to work across multiple datacenters?"
+
+Discuss replication, conflict resolution, and latency considerations.
+
+
+Security: "How would you implement authentication and authorization?"
+
+Address access control lists, encryption, and security protocols.
+
+
+Monitoring and Observability: "How would you monitor the health of this system?"
+
+Explain metrics collection, alerting thresholds, and dashboard design.
+
+
+Admin Operations: "How would you support topic migration or subscriber rebalancing?"
+
+Discuss administrative APIs, controlled shutdowns, and operational tooling.
+
+
+
+Architecture Evolution
+
+Alternative Designs: "Did you consider any alternative architectures? What are their trade-offs?"
+
+Compare event-sourcing, actor models, or other messaging patterns.
+
+
+Integration with Existing Systems: "How would you integrate this with Kafka or RabbitMQ?"
+
+Discuss adapters, bridge patterns, and interoperability considerations.
+
+
+Future-Proofing: "How would you evolve this design as requirements change?"
+
+Address extensibility points, versioning strategies, and interface stability.
+
+
+
+Behavioral Questions
+
+Design Process: "Walk me through how you arrived at this design. What alternatives did you consider?"
+
+Demonstrate your reasoning process and technical decision-making.
+
+
+Performance Tuning: "If you found this system was running slowly, how would you investigate and improve it?"
+
+Show debugging skills and performance optimization knowledge.
+
+
+Handling Ambiguity: "What assumptions did you make in your design that you'd validate with stakeholders?"
+
+Demonstrate business awareness and requirements gathering skills.
+
+
+
+Being prepared for these cross-questions demonstrates not just your design abilities but also your understanding of distributed systems principles, performance considerations, and real-world operational challenges.
