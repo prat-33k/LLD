@@ -1,0 +1,642 @@
+/**
+ * Simplified Tic-Tac-Toe Game - Low-Level Design
+ * 
+ * This implementation uses a simpler approach without unnecessary design patterns
+ */
+
+// 1. Enums for game constants
+
+/**
+ * Represents the possible marks on the board
+ */
+enum Mark {
+    X, O, EMPTY;
+    
+    @Override
+    public String toString() {
+        if (this == EMPTY) return " ";
+        return this.name();
+    }
+}
+
+/**
+ * Represents the possible states of the game
+ */
+enum GameStatus {
+    IN_PROGRESS, X_WON, O_WON, DRAW
+}
+
+// 2. Model classes
+
+/**
+ * Represents a cell on the board
+ */
+class Cell {
+    private final int row;
+    private final int col;
+    private Mark mark;
+    
+    public Cell(int row, int col) {
+        this.row = row;
+        this.col = col;
+        this.mark = Mark.EMPTY;
+    }
+    
+    public int getRow() {
+        return row;
+    }
+    
+    public int getCol() {
+        return col;
+    }
+    
+    public Mark getMark() {
+        return mark;
+    }
+    
+    public void setMark(Mark mark) {
+        this.mark = mark;
+    }
+    
+    public boolean isEmpty() {
+        return mark == Mark.EMPTY;
+    }
+    
+    @Override
+    public String toString() {
+        return mark.toString();
+    }
+}
+
+/**
+ * Represents the game board
+ */
+class Board {
+    private final int size;
+    private final Cell[][] cells;
+    
+    public Board(int size) {
+        this.size = size;
+        this.cells = new Cell[size][size];
+        initializeBoard();
+    }
+    
+    private void initializeBoard() {
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                cells[i][j] = new Cell(i, j);
+            }
+        }
+    }
+    
+    public int getSize() {
+        return size;
+    }
+    
+    public Cell getCell(int row, int col) {
+        if (isValidPosition(row, col)) {
+            return cells[row][col];
+        }
+        return null;
+    }
+    
+    public boolean isValidPosition(int row, int col) {
+        return row >= 0 && row < size && col >= 0 && col < size;
+    }
+    
+    public boolean isFull() {
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                if (cells[i][j].isEmpty()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    public Cell[][] getCells() {
+        return cells;
+    }
+    
+    public void display() {
+        System.out.println();
+        for (int i = 0; i < size; i++) {
+            // Draw horizontal line between rows
+            if (i > 0) {
+                System.out.println("-".repeat(4 * size - 1));
+            }
+            
+            for (int j = 0; j < size; j++) {
+                // Draw vertical separator between columns
+                if (j > 0) {
+                    System.out.print(" | ");
+                }
+                System.out.print(cells[i][j]);
+            }
+            System.out.println();
+        }
+        System.out.println();
+    }
+    
+    public void reset() {
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                cells[i][j].setMark(Mark.EMPTY);
+            }
+        }
+    }
+}
+
+// 3. Player classes
+
+/**
+ * Base abstract class for all players
+ */
+abstract class Player {
+    private final String name;
+    private final Mark mark;
+    
+    public Player(String name, Mark mark) {
+        this.name = name;
+        this.mark = mark;
+    }
+    
+    public String getName() {
+        return name;
+    }
+    
+    public Mark getMark() {
+        return mark;
+    }
+    
+    /**
+     * Make a move on the board
+     * @param board The current game board
+     * @return true if the move was successful
+     */
+    public abstract boolean makeMove(Board board);
+}
+
+/**
+ * Human player that takes input from the console
+ */
+class HumanPlayer extends Player {
+    private final Scanner scanner;
+    
+    public HumanPlayer(String name, Mark mark, Scanner scanner) {
+        super(name, mark);
+        this.scanner = scanner;
+    }
+    
+    @Override
+    public boolean makeMove(Board board) {
+        while (true) {
+            try {
+                System.out.printf("%s's turn (%s). Enter row and column (0-%d): ", 
+                                 getName(), getMark(), board.getSize() - 1);
+                int row = scanner.nextInt();
+                int col = scanner.nextInt();
+                
+                if (!board.isValidPosition(row, col)) {
+                    System.out.println("Invalid position! Try again.");
+                    continue;
+                }
+                
+                Cell cell = board.getCell(row, col);
+                if (!cell.isEmpty()) {
+                    System.out.println("Cell already occupied! Try again.");
+                    continue;
+                }
+                
+                cell.setMark(getMark());
+                return true;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input! Please enter numbers.");
+                scanner.nextLine(); // Clear the scanner buffer
+            }
+        }
+    }
+}
+
+/**
+ * Computer player with a simple strategy
+ */
+class ComputerPlayer extends Player {
+    private final Random random;
+    
+    public ComputerPlayer(String name, Mark mark) {
+        super(name, mark);
+        this.random = new Random();
+    }
+    
+    @Override
+    public boolean makeMove(Board board) {
+        System.out.printf("%s's turn (%s)...\n", getName(), getMark());
+        
+        // Add a small delay to make it seem like the computer is "thinking"
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // First, try to win if possible
+        if (makeWinningMove(board)) {
+            return true;
+        }
+        
+        // Then, try to block opponent from winning
+        if (makeBlockingMove(board)) {
+            return true;
+        }
+        
+        // Otherwise, make a random move
+        return makeRandomMove(board);
+    }
+    
+    private boolean makeWinningMove(Board board) {
+        return findStrategicMove(board, getMark());
+    }
+    
+    private boolean makeBlockingMove(Board board) {
+        // Find which mark to block
+        Mark opponentMark = getMark() == Mark.X ? Mark.O : Mark.X;
+        return findStrategicMove(board, opponentMark);
+    }
+    
+    private boolean findStrategicMove(Board board, Mark markToCheck) {
+        int size = board.getSize();
+        Cell[][] cells = board.getCells();
+        
+        // Check rows
+        for (int i = 0; i < size; i++) {
+            int count = 0;
+            Cell emptyCell = null;
+            
+            for (int j = 0; j < size; j++) {
+                if (cells[i][j].getMark() == markToCheck) {
+                    count++;
+                } else if (cells[i][j].isEmpty()) {
+                    emptyCell = cells[i][j];
+                }
+            }
+            
+            if (count == size - 1 && emptyCell != null) {
+                emptyCell.setMark(getMark());
+                return true;
+            }
+        }
+        
+        // Check columns
+        for (int j = 0; j < size; j++) {
+            int count = 0;
+            Cell emptyCell = null;
+            
+            for (int i = 0; i < size; i++) {
+                if (cells[i][j].getMark() == markToCheck) {
+                    count++;
+                } else if (cells[i][j].isEmpty()) {
+                    emptyCell = cells[i][j];
+                }
+            }
+            
+            if (count == size - 1 && emptyCell != null) {
+                emptyCell.setMark(getMark());
+                return true;
+            }
+        }
+        
+        // Check main diagonal
+        int countDiag = 0;
+        Cell emptyDiagCell = null;
+        
+        for (int i = 0; i < size; i++) {
+            if (cells[i][i].getMark() == markToCheck) {
+                countDiag++;
+            } else if (cells[i][i].isEmpty()) {
+                emptyDiagCell = cells[i][i];
+            }
+        }
+        
+        if (countDiag == size - 1 && emptyDiagCell != null) {
+            emptyDiagCell.setMark(getMark());
+            return true;
+        }
+        
+        // Check anti-diagonal
+        int countAntiDiag = 0;
+        Cell emptyAntiDiagCell = null;
+        
+        for (int i = 0; i < size; i++) {
+            if (cells[i][size - 1 - i].getMark() == markToCheck) {
+                countAntiDiag++;
+            } else if (cells[i][size - 1 - i].isEmpty()) {
+                emptyAntiDiagCell = cells[i][size - 1 - i];
+            }
+        }
+        
+        if (countAntiDiag == size - 1 && emptyAntiDiagCell != null) {
+            emptyAntiDiagCell.setMark(getMark());
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private boolean makeRandomMove(Board board) {
+        int size = board.getSize();
+        List<Cell> emptyCells = new ArrayList<>();
+        
+        // Find all empty cells
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                Cell cell = board.getCell(i, j);
+                if (cell.isEmpty()) {
+                    emptyCells.add(cell);
+                }
+            }
+        }
+        
+        if (emptyCells.isEmpty()) {
+            return false;
+        }
+        
+        // Choose a random empty cell
+        Cell randomCell = emptyCells.get(random.nextInt(emptyCells.size()));
+        randomCell.setMark(getMark());
+        return true;
+    }
+}
+
+// 4. Game class
+
+/**
+ * Main game class that orchestrates the game
+ */
+class Game {
+    private final Board board;
+    private final Player player1;
+    private final Player player2;
+    private Player currentPlayer;
+    private GameStatus status;
+    
+    public Game(Board board, Player player1, Player player2) {
+        this.board = board;
+        this.player1 = player1;
+        this.player2 = player2;
+        this.currentPlayer = player1;
+        this.status = GameStatus.IN_PROGRESS;
+    }
+    
+    /**
+     * Start the game and play until completion
+     */
+    public void start() {
+        System.out.println("=== TIC-TAC-TOE GAME ===");
+        System.out.println("Board size: " + board.getSize() + "x" + board.getSize());
+        System.out.println("Player 1: " + player1.getName() + " (" + player1.getMark() + ")");
+        System.out.println("Player 2: " + player2.getName() + " (" + player2.getMark() + ")");
+        System.out.println("=======================");
+        
+        board.display();
+        
+        while (status == GameStatus.IN_PROGRESS) {
+            boolean moveMade = currentPlayer.makeMove(board);
+            
+            if (moveMade) {
+                board.display();
+                
+                // Check for win
+                if (hasWon(currentPlayer.getMark())) {
+                    status = currentPlayer.getMark() == Mark.X ? GameStatus.X_WON : GameStatus.O_WON;
+                    announceResult();
+                    break;
+                }
+                
+                // Check for draw
+                if (board.isFull()) {
+                    status = GameStatus.DRAW;
+                    announceResult();
+                    break;
+                }
+                
+                // Switch player
+                currentPlayer = (currentPlayer == player1) ? player2 : player1;
+            }
+        }
+    }
+    
+    /**
+     * Check if a player has won
+     */
+    private boolean hasWon(Mark mark) {
+        int size = board.getSize();
+        Cell[][] cells = board.getCells();
+        
+        // Check rows
+        for (int i = 0; i < size; i++) {
+            boolean rowWin = true;
+            for (int j = 0; j < size; j++) {
+                if (cells[i][j].getMark() != mark) {
+                    rowWin = false;
+                    break;
+                }
+            }
+            if (rowWin) return true;
+        }
+        
+        // Check columns
+        for (int j = 0; j < size; j++) {
+            boolean colWin = true;
+            for (int i = 0; i < size; i++) {
+                if (cells[i][j].getMark() != mark) {
+                    colWin = false;
+                    break;
+                }
+            }
+            if (colWin) return true;
+        }
+        
+        // Check main diagonal
+        boolean diagWin = true;
+        for (int i = 0; i < size; i++) {
+            if (cells[i][i].getMark() != mark) {
+                diagWin = false;
+                break;
+            }
+        }
+        if (diagWin) return true;
+        
+        // Check anti-diagonal
+        boolean antiDiagWin = true;
+        for (int i = 0; i < size; i++) {
+            if (cells[i][size - 1 - i].getMark() != mark) {
+                antiDiagWin = false;
+                break;
+            }
+        }
+        
+        return antiDiagWin;
+    }
+    
+    /**
+     * Announce the game result
+     */
+    private void announceResult() {
+        System.out.println("===== GAME OVER =====");
+        
+        if (status == GameStatus.DRAW) {
+            System.out.println("The game ended in a draw!");
+        } else {
+            System.out.printf("Player %s (%s) wins!\n", currentPlayer.getName(), currentPlayer.getMark());
+        }
+        
+        System.out.println("=====================");
+    }
+}
+
+// 5. TicTacToeGame class for game setup
+
+/**
+ * Class to set up and run the game
+ */
+class TicTacToeGame {
+    private final Scanner scanner;
+    
+    public TicTacToeGame() {
+        this.scanner = new Scanner(System.in);
+    }
+    
+    /**
+     * Start the game with user input for configuration
+     */
+    public void start() {
+        System.out.println("Welcome to Tic-Tac-Toe!");
+        
+        // Get board size
+        int boardSize = getBoardSize();
+        Board board = new Board(boardSize);
+        
+        // Create players
+        Player player1 = createPlayer(1, Mark.X);
+        Player player2 = createPlayer(2, Mark.O);
+        
+        // Create and start the game
+        Game game = new Game(board, player1, player2);
+        game.start();
+        
+        // Ask if the player wants to play again
+        if (playAgain()) {
+            start();
+        } else {
+            System.out.println("Thanks for playing!");
+            scanner.close();
+        }
+    }
+    
+    private int getBoardSize() {
+        while (true) {
+            try {
+                System.out.print("Enter the board size (3-10): ");
+                int size = scanner.nextInt();
+                scanner.nextLine(); // Consume newline
+                
+                if (size < 3 || size > 10) {
+                    System.out.println("Board size must be between 3 and 10. Please try again.");
+                    continue;
+                }
+                
+                return size;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input! Please enter a number.");
+                scanner.nextLine(); // Clear the scanner buffer
+            }
+        }
+    }
+    
+    private Player createPlayer(int playerNumber, Mark mark) {
+        boolean isHuman = getPlayerType(playerNumber);
+        String name = getPlayerName(playerNumber, isHuman);
+        
+        if (isHuman) {
+            return new HumanPlayer(name, mark, scanner);
+        } else {
+            return new ComputerPlayer(name, mark);
+        }
+    }
+    
+    private boolean getPlayerType(int playerNumber) {
+        while (true) {
+            System.out.printf("Select Player %d type:\n", playerNumber);
+            System.out.println("1. Human");
+            System.out.println("2. Computer");
+            System.out.print("Enter choice (1-2): ");
+            
+            try {
+                int choice = scanner.nextInt();
+                scanner.nextLine(); // Consume newline
+                
+                if (choice == 1) {
+                    return true; // Human
+                } else if (choice == 2) {
+                    return false; // Computer
+                } else {
+                    System.out.println("Invalid choice. Please enter 1 or 2.");
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input! Please enter a number.");
+                scanner.nextLine(); // Clear the scanner buffer
+            }
+        }
+    }
+    
+    private String getPlayerName(int playerNumber, boolean isHuman) {
+        if (!isHuman) {
+            return "Computer-" + playerNumber;
+        }
+        
+        System.out.printf("Enter name for Player %d: ", playerNumber);
+        String name = scanner.nextLine().trim();
+        
+        if (name.isEmpty()) {
+            return "Player-" + playerNumber;
+        }
+        
+        return name;
+    }
+    
+    private boolean playAgain() {
+        while (true) {
+            System.out.print("Play again? (y/n): ");
+            String response = scanner.nextLine().trim().toLowerCase();
+            
+            if (response.equals("y") || response.equals("yes")) {
+                return true;
+            } else if (response.equals("n") || response.equals("no")) {
+                return false;
+            } else {
+                System.out.println("Invalid input. Please enter 'y' or 'n'.");
+            }
+        }
+    }
+}
+
+// 6. Main class
+
+/**
+ * Main class to run the game
+ */
+public class TicTacToeApplication {
+    public static void main(String[] args) {
+        TicTacToeGame game = new TicTacToeGame();
+        game.start();
+    }
+}
+
+// Required imports
+import java.util.ArrayList;
+import java.util.InputMismatchException;
+import java.util.List;
+import java.util.Random;
+import java.util.Scanner;
