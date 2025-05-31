@@ -1,0 +1,667 @@
+import java.util.*;
+
+// Entity Classes
+class User {
+    private final String userId;
+    private String name;
+
+    public User(String userId, String name) {
+        this.userId = userId;
+        this.name = name;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+
+class Room {
+    private final String roomId;
+    private final String type;
+    private boolean isAvailable;
+
+    public Room(String roomId, String type) {
+        this.roomId = roomId;
+        this.type = type;
+        this.isAvailable = true;
+    }
+
+    public String getRoomId() {
+        return roomId;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public boolean isAvailable() {
+        return isAvailable;
+    }
+
+    public void setAvailable(boolean available) {
+        isAvailable = available;
+    }
+}
+
+class Reservation {
+    private final String reservationId;
+    private final String userId;
+    private final String roomId;
+    private final Date checkInDate;
+    private final Date checkOutDate;
+
+    public Reservation(String reservationId, String userId, String roomId, Date checkInDate, Date checkOutDate) {
+        this.reservationId = reservationId;
+        this.userId = userId;
+        this.roomId = roomId;
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+    }
+
+    public String getReservationId() {
+        return reservationId;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public String getRoomId() {
+        return roomId;
+    }
+
+    public Date getCheckInDate() {
+        return checkInDate;
+    }
+
+    public Date getCheckOutDate() {
+        return checkOutDate;
+    }
+}
+
+// Service Classes
+class UserService {
+    private final Map<String, User> users = new HashMap<>();
+
+    public User createUser(String name) {
+        String id = UUID.randomUUID().toString();
+        User user = new User(id, name);
+        users.put(id, user);
+        return user;
+    }
+
+    public User getUser(String id) {
+        return users.get(id);
+    }
+}
+
+class RoomService {
+    private final Map<String, Room> rooms = new HashMap<>();
+
+    public Room addRoom(String roomId, String type) {
+        Room room = new Room(roomId, type);
+        rooms.put(roomId, room);
+        return room;
+    }
+
+    public List<Room> getAvailableRooms() {
+        List<Room> availableRooms = new ArrayList<>();
+        for (Room room : rooms.values()) {
+            if (room.isAvailable()) {
+                availableRooms.add(room);
+            }
+        }
+        return availableRooms;
+    }
+
+    public Room getRoom(String roomId) {
+        return rooms.get(roomId);
+    }
+}
+
+class ReservationService {
+    private final Map<String, Reservation> reservations = new HashMap<>();
+    private final RoomService roomService;
+
+    public ReservationService(RoomService roomService) {
+        this.roomService = roomService;
+    }
+
+    public Reservation createReservation(String userId, String roomId, Date checkIn, Date checkOut) {
+        Room room = roomService.getRoom(roomId);
+        if (room == null || !room.isAvailable()) {
+            throw new IllegalArgumentException("Room is not available");
+        }
+        String id = UUID.randomUUID().toString();
+        Reservation reservation = new Reservation(id, userId, roomId, checkIn, checkOut);
+        reservations.put(id, reservation);
+        room.setAvailable(false);
+        return reservation;
+    }
+
+    public List<Reservation> getReservationsByUser(String userId) {
+        List<Reservation> userReservations = new ArrayList<>();
+        for (Reservation r : reservations.values()) {
+            if (r.getUserId().equals(userId)) {
+                userReservations.add(r);
+            }
+        }
+        return userReservations;
+    }
+}
+
+// Demo
+public class HotelManagementDemo {
+    public static void main(String[] args) {
+        UserService userService = new UserService();
+        RoomService roomService = new RoomService();
+        ReservationService reservationService = new ReservationService(roomService);
+
+        User user = userService.createUser("Alice");
+        roomService.addRoom("101", "Single");
+        roomService.addRoom("102", "Double");
+
+        List<Room> availableRooms = roomService.getAvailableRooms();
+        System.out.println("Available rooms: ");
+        for (Room room : availableRooms) {
+            System.out.println("Room ID: " + room.getRoomId() + ", Type: " + room.getType());
+        }
+
+        Reservation reservation = reservationService.createReservation(
+                user.getUserId(), "101",
+                new Date(),
+                new Date(System.currentTimeMillis() + 86400000) // 1 day later
+        );
+
+        System.out.println("Reservation made: ID = " + reservation.getReservationId());
+    }
+}
+
+
+
+ReservationService reservationService = new ReservationService(roomService);
+
+wont this make it tightly coupled?
+ChatGPT said:
+
+You're absolutely right to be thinking in terms of coupling, and it's an excellent observation.
+
+Yes, the line:
+
+ReservationService reservationService = new ReservationService(roomService);
+
+does introduce tight coupling between ReservationService and RoomService. Let’s break this down:
+✅ Why the coupling happens:
+
+In the constructor of ReservationService:
+
+public ReservationService(RoomService roomService) {
+    this.roomService = roomService;
+}
+
+You're injecting RoomService directly. So, ReservationService depends directly on a concrete implementation of RoomService.
+🔄 Why we still do this in LLD or simple demos:
+
+    For small-scale projects, prototypes, or educational demos, this is acceptable and often preferred for simplicity.
+
+    It makes the interaction between services explicit and easier to follow.
+
+    We're not worried about changing implementations or adding mock services—yet.
+
+⚠️ Downsides (Tight Coupling):
+
+    Hard to test: You can't easily mock or replace RoomService in unit tests.
+
+    Low flexibility: If the room logic moves to another service or changes structure, it may break ReservationService.
+
+    Violates Dependency Inversion Principle (DIP) from SOLID principles.
+
+✅ How to reduce the coupling:
+1. Use an Interface (Abstraction)
+
+public interface IRoomService {
+    Room getRoom(String roomId);
+    List<Room> getAvailableRooms();
+}
+
+Let RoomService implement IRoomService:
+
+public class RoomService implements IRoomService {
+    // existing implementation
+}
+
+Now ReservationService depends on the interface:
+
+public class ReservationService {
+    private final IRoomService roomService;
+
+    public ReservationService(IRoomService roomService) {
+        this.roomService = roomService;
+    }
+}
+
+This way, ReservationService depends on an abstraction, not a concrete class, promoting loose coupling.
+✅ In a Dependency Injection Framework (e.g., Spring):
+
+Spring would inject the dependency automatically:
+
+@Service
+public class ReservationService {
+    @Autowired
+    private IRoomService roomService;
+}
+
+This takes care of wiring and also supports mocking in tests.
+✅ Summary:
+Aspect	Tight Coupling (Current)	Loose Coupling (Interface)
+Simplicity	✔️ Easy for demo and prototypes	❌ Slightly more setup
+Flexibility	❌ Low	✔️ High
+Testability	❌ Hard to mock	✔️ Easy to mock
+Best Practice (SOLID)	❌ Violates DIP	✔️ Follows DIP
+
+Would you like me to refactor the code using interfaces and loose coupling?
+You said:
+What design patterns can we use in this system or have you used any in the current implementation?
+ChatGPT said:
+
+Excellent question! Let’s look at the design patterns you've already used (even if implicitly) and other patterns that can be introduced to improve the hotel management system's structure, flexibility, and maintainability.
+✅ Design Patterns Used (Implicitly)
+1. Factory Pattern (Implicit)
+
+In UserService, RoomService, and ReservationService:
+
+User user = new User(id, name);
+
+You are creating instances inside the service, which is similar to a basic factory behavior. In real-world scenarios, this can be extracted into a dedicated factory class to separate creation logic.
+2. Singleton Pattern (Can Be Added)
+
+If your services (UserService, etc.) are stateless or only store in-memory data, they can be singletons:
+
+public class UserService {
+    private static final UserService instance = new UserService();
+    public static UserService getInstance() {
+        return instance;
+    }
+}
+
+➡️ In a real application, frameworks like Spring manage this automatically with the @Service annotation.
+3. Service Layer Pattern
+
+Your design already follows the Service Layer pattern:
+
+    Business logic is in separate service classes (UserService, RoomService, ReservationService).
+
+    These services coordinate between entities, maintain state, and encapsulate business rules.
+
+This makes the code modular and testable.
+💡 Design Patterns You Can Add
+4. Strategy Pattern
+
+Use this if you want to support different pricing strategies (e.g., seasonal, weekend, VIP):
+
+interface PricingStrategy {
+    double calculatePrice(Room room, Date checkIn, Date checkOut);
+}
+
+class StandardPricing implements PricingStrategy { ... }
+class WeekendDiscountPricing implements PricingStrategy { ... }
+
+Your ReservationService could take a PricingStrategy to calculate cost.
+5. Observer Pattern
+
+Useful for notifications:
+
+    When a reservation is made, notify the user or front desk.
+
+    Create an observer interface and attach listeners.
+
+interface ReservationObserver {
+    void onReservationMade(Reservation reservation);
+}
+
+6. Builder Pattern
+
+For building complex objects like Reservation or Room, especially if they have optional parameters.
+
+Reservation reservation = new ReservationBuilder()
+    .withUserId(...)
+    .withRoomId(...)
+    .withCheckInDate(...)
+    .build();
+
+7. Repository Pattern (If using DB)
+
+To abstract database access:
+
+interface ReservationRepository {
+    Reservation save(Reservation r);
+    Reservation findById(String id);
+}
+
+This decouples data storage from business logic.
+8. Dependency Injection (DI)
+
+Currently you're instantiating service classes manually. In a DI-enabled framework like Spring, services are injected via constructor or annotations, reducing tight coupling and increasing testability.
+
+@Autowired
+public ReservationService(IRoomService roomService) {
+    this.roomService = roomService;
+}
+
+📌 Summary Table
+Pattern	Used/Proposed	Purpose
+Factory	✅ (implicit)	Object creation
+Singleton	🔄 (optional)	Ensure one instance per service
+Service Layer	✅	Encapsulate business logic
+Strategy	🔄 (optional)	Dynamic pricing logic
+Observer	🔄 (optional)	Notification mechanism
+Builder	🔄 (optional)	Build complex objects step by step
+Repository	🔄 (optional)	Abstraction for data access
+Dependency Injection	🔄 (optional)	Loose coupling, testability, and better wiring
+
+Would you like me to refactor any part of the system using one of these design patterns (e.g., Strategy for pricing or Builder for reservations)?
+You said:
+Havent we used facade design pattern here?
+ChatGPT said:
+
+Great catch — and yes, you're absolutely right to think in terms of the Facade Design Pattern in this context.
+
+Let’s walk through what the Facade Pattern is and how it relates to your current system.
+✅ What is the Facade Design Pattern?
+
+Definition:
+The Facade Pattern provides a unified interface to a set of interfaces in a subsystem. It defines a higher-level interface that makes the subsystem easier to use.
+
+In other words:
+
+    It hides the complexity of multiple services or components and provides a simple API for clients.
+
+🔍 Is it used in your current system?
+👉 Kind of — But Not Fully Yet
+
+You have separate services (UserService, RoomService, ReservationService) that:
+
+    Manage their own responsibilities
+
+    Provide methods to interact with the data
+
+However, in your current usage (e.g., in HotelManagementDemo.main()), the client is directly orchestrating between services:
+
+User user = userService.createUser("Alice");
+roomService.addRoom("101", "Single");
+reservationService.createReservation(user.getUserId(), "101", ...);
+
+This means:
+
+    The client knows too much about how to interact with different services.
+
+    No single entry point encapsulates or simplifies this logic.
+
+💡 How to Truly Use Facade Pattern Here
+
+You can create a HotelManagementFacade that wraps all the service calls:
+✅ Example: HotelManagementFacade
+
+public class HotelManagementFacade {
+    private final UserService userService;
+    private final RoomService roomService;
+    private final ReservationService reservationService;
+
+    public HotelManagementFacade() {
+        this.userService = new UserService();
+        this.roomService = new RoomService();
+        this.reservationService = new ReservationService(roomService);
+    }
+
+    public User registerUser(String name) {
+        return userService.createUser(name);
+    }
+
+    public void addRoom(String roomId, String type) {
+        roomService.addRoom(roomId, type);
+    }
+
+    public List<Room> getAvailableRooms() {
+        return roomService.getAvailableRooms();
+    }
+
+    public Reservation bookRoom(String userId, String roomId, Date checkIn, Date checkOut) {
+        return reservationService.createReservation(userId, roomId, checkIn, checkOut);
+    }
+}
+
+👉 Now the client code becomes:
+
+HotelManagementFacade facade = new HotelManagementFacade();
+
+User user = facade.registerUser("Alice");
+facade.addRoom("101", "Single");
+facade.addRoom("102", "Double");
+
+List<Room> availableRooms = facade.getAvailableRooms();
+Reservation reservation = facade.bookRoom(user.getUserId(), "101", new Date(), new Date());
+
+✅ Benefits of Using Facade Here
+Benefit	Description
+Simplified API	Client interacts with 1 object instead of 3+
+Reduced Coupling	Client is decoupled from the internal services
+Easier Maintenance	Internal logic changes are hidden from clients
+Better Abstraction	Exposes domain-level operations (bookRoom)
+🧠 Summary
+Question	Answer
+Have we used Facade Pattern?	❌ Not yet, but we're close
+Can we apply it here?	✅ Absolutely — and it would help
+What does it give us?	Simplified and unified API to client
+
+Would you like me to implement the HotelManagementFacade class and refactor the demo code to use it?
+You said:
+Is there any benefit of using a facade here?
+ChatGPT said:
+
+Yes — using a Facade in your hotel management system offers real and practical benefits, especially as the system grows. However, it’s not always necessary for small-scale designs. Let’s break it down:
+✅ When is a Facade Beneficial?
+1. Simplifies Complex Interactions
+
+Without a facade:
+
+User user = userService.createUser("Alice");
+roomService.addRoom("101", "Single");
+reservationService.createReservation(user.getUserId(), "101", checkIn, checkOut);
+
+    The client must know about 3 services and how to coordinate them.
+
+    This logic is duplicated every time you use it.
+
+With a facade:
+
+User user = facade.registerUser("Alice");
+facade.addRoom("101", "Single");
+facade.bookRoom(user.getUserId(), "101", checkIn, checkOut);
+
+    Cleaner and more intuitive API for high-level operations.
+
+    The orchestration is now encapsulated in one place.
+
+2. Reduces Coupling
+
+    The client (e.g., main(), UI, or controller) doesn't need to know which service does what.
+
+    Future changes to internal service logic won’t impact the client as long as the facade interface stays consistent.
+
+3. Improves Maintainability
+
+    You can update service logic (e.g., change how a reservation is created) in one place — inside the facade — without changing code across all clients.
+
+4. Good for Layered Architecture
+
+    If you’re building a multi-tier app (e.g., web + backend), the facade acts as a middle layer between UI/API controllers and business logic.
+
+❌ When a Facade Might Be Overkill
+
+    For a small, self-contained app or a prototype with limited services, a facade might not be worth the added abstraction.
+
+    If your services are truly independent and rarely interact, the facade adds complexity without much gain.
+
+📌 Use Case Evaluation: Your Hotel System
+Criteria	Is it a good fit for Facade?	Why?
+Multiple services involved	✅ Yes	UserService, RoomService, ReservationService
+High-level operations needed	✅ Yes	Register user, Book room, etc.
+Client needing simplified API	✅ Yes	Demo code, potential UI/controller
+Small/simple project	⚠️ Maybe not essential	OK to skip for now, but scales well
+✅ Conclusion
+
+Yes, a Facade is beneficial in your system because:
+
+    It simplifies service coordination.
+
+    It provides a clean, unified interface.
+
+    It improves scalability and maintainability.
+
+👉 It’s especially useful if:
+
+    You plan to expand the system.
+
+    You have multiple clients (UI, API).
+
+    You want to keep orchestration logic out of controllers or main methods.
+
+Would you like me to add a HotelManagementFacade and refactor your demo accordingly?
+You said:
+Can you prove our current code is scalable by adding some newer functionality
+ChatGPT said:
+
+Absolutely! One great way to demonstrate scalability is by adding new functionality without breaking or heavily modifying existing code — showing how well the design supports extension.
+Let's add a new feature:
+
+Feature:
+Add Room Pricing and implement a discount system based on room type (e.g., 10% off for "Double" rooms). We'll keep the existing services largely unchanged and add a new PricingService and modify ReservationService to calculate total price during reservation.
+Step 1: Add PricingService
+
+class PricingService {
+    private final Map<String, Double> basePrices = new HashMap<>();
+
+    public PricingService() {
+        basePrices.put("Single", 100.0);
+        basePrices.put("Double", 150.0);
+        basePrices.put("Suite", 300.0);
+    }
+
+    public double getPrice(String roomType) {
+        return basePrices.getOrDefault(roomType, 0.0);
+    }
+
+    // Example discount: 10% off for Double rooms
+    public double getDiscountedPrice(String roomType) {
+        double price = getPrice(roomType);
+        if ("Double".equalsIgnoreCase(roomType)) {
+            return price * 0.9; // 10% discount
+        }
+        return price;
+    }
+}
+
+Step 2: Modify Reservation to include total price
+
+Add a new field totalPrice and getter:
+
+class Reservation {
+    // existing fields
+    private final double totalPrice;
+
+    public Reservation(String reservationId, String userId, String roomId, Date checkInDate, Date checkOutDate, double totalPrice) {
+        this.reservationId = reservationId;
+        this.userId = userId;
+        this.roomId = roomId;
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        this.totalPrice = totalPrice;
+    }
+
+    public double getTotalPrice() {
+        return totalPrice;
+    }
+}
+
+Step 3: Update ReservationService to calculate price using PricingService
+
+class ReservationService {
+    private final Map<String, Reservation> reservations = new HashMap<>();
+    private final RoomService roomService;
+    private final PricingService pricingService;
+
+    public ReservationService(RoomService roomService, PricingService pricingService) {
+        this.roomService = roomService;
+        this.pricingService = pricingService;
+    }
+
+    public Reservation createReservation(String userId, String roomId, Date checkIn, Date checkOut) {
+        Room room = roomService.getRoom(roomId);
+        if (room == null || !room.isAvailable()) {
+            throw new IllegalArgumentException("Room is not available");
+        }
+
+        // Calculate stay duration in days
+        long diffMillis = checkOut.getTime() - checkIn.getTime();
+        int days = (int) (diffMillis / (1000 * 60 * 60 * 24));
+        days = Math.max(days, 1); // minimum 1 day
+
+        // Calculate price with discount
+        double pricePerDay = pricingService.getDiscountedPrice(room.getType());
+        double totalPrice = pricePerDay * days;
+
+        String id = UUID.randomUUID().toString();
+        Reservation reservation = new Reservation(id, userId, roomId, checkIn, checkOut, totalPrice);
+        reservations.put(id, reservation);
+        room.setAvailable(false);
+        return reservation;
+    }
+}
+
+Step 4: Demo update
+
+public class HotelManagementDemo {
+    public static void main(String[] args) {
+        UserService userService = new UserService();
+        RoomService roomService = new RoomService();
+        PricingService pricingService = new PricingService();
+        ReservationService reservationService = new ReservationService(roomService, pricingService);
+
+        User user = userService.createUser("Alice");
+        roomService.addRoom("101", "Single");
+        roomService.addRoom("102", "Double");
+
+        Reservation reservation = reservationService.createReservation(
+            user.getUserId(), "102",
+            new Date(), 
+            new Date(System.currentTimeMillis() + 2 * 86400000) // 2 days
+        );
+
+        System.out.println("Reservation made with total price: $" + reservation.getTotalPrice());
+    }
+}
+
+Why is this scalable?
+
+    Open for extension, closed for modification (OCP):
+    We added pricing and discounts without changing existing entities (User, Room) or UserService and RoomService.
+
+    Single Responsibility Principle (SRP):
+    Pricing logic moved to its own PricingService.
+
+    Easy to add more pricing rules or discount strategies (can evolve to Strategy Pattern).
+
+    Dependency Injection used in ReservationService keeps coupling manageable.
+
+If you want, I can also help refactor this into interfaces or add a Strategy Pattern for more flexible pricing! Would you like me to?
+
+
+ChatGPT can make mistakes. Check important info. See
