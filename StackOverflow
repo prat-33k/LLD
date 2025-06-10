@@ -1,0 +1,813 @@
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+// Enums
+enum QuestionStatus {
+    OPEN, CLOSED, DELETED
+}
+
+enum VoteType {
+    UPVOTE, DOWNVOTE
+}
+
+enum UserRole {
+    MEMBER, MODERATOR, ADMIN
+}
+
+// ===============================
+// YOUR ORIGINAL DESIGN (WITH FIXES)
+// ===============================
+
+class User_Original {
+    private String userId;
+    private String name;
+    private String email;
+    private List<Question> questions;  // ❌ This creates tight coupling
+    private List<Answer> answers;      // ❌ This can cause memory issues
+    
+    public User_Original(String userId, String name, String email) {
+        this.userId = userId;
+        this.name = name;
+        this.email = email;
+        this.questions = new ArrayList<>();
+        this.answers = new ArrayList<>();
+    }
+    
+    // Getters and setters
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public List<Question> getQuestions() { return questions; }
+    public List<Answer> getAnswers() { return answers; }
+}
+
+class Question_Original {
+    private String questionId;
+    private String description;
+    private List<String> tags;
+    private QuestionStatus status;
+    private List<Answer> answers;
+    private int votes;  // ❌ Simple int doesn't track who voted
+    private String userId;
+    
+    public Question_Original(String questionId, String description, List<String> tags, String userId) {
+        this.questionId = questionId;
+        this.description = description;
+        this.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
+        this.status = QuestionStatus.OPEN;
+        this.answers = new ArrayList<>();
+        this.votes = 0;
+        this.userId = userId;
+    }
+    
+    // Getters and setters
+    public String getQuestionId() { return questionId; }
+    public String getDescription() { return description; }
+    public List<String> getTags() { return tags; }
+    public QuestionStatus getStatus() { return status; }
+    public List<Answer> getAnswers() { return answers; }
+    public int getVotes() { return votes; }
+    public String getUserId() { return userId; }
+    
+    public void setStatus(QuestionStatus status) { this.status = status; }
+    public void setVotes(int votes) { this.votes = votes; }
+}
+
+class Answer_Original {
+    private String answerId;
+    private String description;
+    private int votes;
+    private String questionId;
+    private String userId;
+    
+    public Answer_Original(String answerId, String description, String questionId, String userId) {
+        this.answerId = answerId;
+        this.description = description;
+        this.votes = 0;
+        this.questionId = questionId;
+        this.userId = userId;
+    }
+    
+    // Getters and setters
+    public String getAnswerId() { return answerId; }
+    public String getDescription() { return description; }
+    public int getVotes() { return votes; }
+    public String getQuestionId() { return questionId; }
+    public String getUserId() { return userId; }
+    
+    public void setVotes(int votes) { this.votes = votes; }
+}
+
+// ===============================
+// IMPROVED DESIGN
+// ===============================
+
+class User {
+    private String userId;
+    private String name;
+    private String email;
+    private UserRole role;
+    private int reputation;
+    private LocalDateTime joinDate;
+    private boolean isActive;
+    
+    public User(String userId, String name, String email) {
+        this.userId = userId;
+        this.name = name;
+        this.email = email;
+        this.role = UserRole.MEMBER;
+        this.reputation = 0;
+        this.joinDate = LocalDateTime.now();
+        this.isActive = true;
+    }
+    
+    // ✅ Business logic in entity
+    public void addReputation(int points) {
+        this.reputation += points;
+    }
+    
+    public void deductReputation(int points) {
+        this.reputation = Math.max(0, this.reputation - points);
+    }
+    
+    public boolean canVote() {
+        return reputation >= 15; // Stack Overflow rule
+    }
+    
+    public boolean canComment() {
+        return reputation >= 50;
+    }
+    
+    public boolean canCloseQuestions() {
+        return reputation >= 3000 || role == UserRole.MODERATOR;
+    }
+    
+    // Getters
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public UserRole getRole() { return role; }
+    public int getReputation() { return reputation; }
+    public LocalDateTime getJoinDate() { return joinDate; }
+    public boolean isActive() { return isActive; }
+    
+    public void setRole(UserRole role) { this.role = role; }
+    public void setActive(boolean active) { this.isActive = active; }
+}
+
+class Question {
+    private String questionId;
+    private String title;
+    private String description;
+    private String userId;
+    private LocalDateTime createdAt;
+    private LocalDateTime lastModified;
+    private QuestionStatus status;
+    private int viewCount;
+    private List<String> tags;
+    
+    public Question(String questionId, String title, String description, String userId, List<String> tags) {
+        this.questionId = questionId;
+        this.title = title;
+        this.description = description;
+        this.userId = userId;
+        this.createdAt = LocalDateTime.now();
+        this.lastModified = LocalDateTime.now();
+        this.status = QuestionStatus.OPEN;
+        this.viewCount = 0;
+        this.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
+    }
+    
+    // ✅ Business logic in entity
+    public void incrementViewCount() {
+        this.viewCount++;
+    }
+    
+    public void close() {
+        if (status == QuestionStatus.OPEN) {
+            this.status = QuestionStatus.CLOSED;
+            this.lastModified = LocalDateTime.now();
+        }
+    }
+    
+    public void reopen() {
+        if (status == QuestionStatus.CLOSED) {
+            this.status = QuestionStatus.OPEN;
+            this.lastModified = LocalDateTime.now();
+        }
+    }
+    
+    public boolean isOpen() {
+        return status == QuestionStatus.OPEN;
+    }
+    
+    public boolean hasTag(String tag) {
+        return tags.contains(tag.toLowerCase());
+    }
+    
+    // Getters
+    public String getQuestionId() { return questionId; }
+    public String getTitle() { return title; }
+    public String getDescription() { return description; }
+    public String getUserId() { return userId; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getLastModified() { return lastModified; }
+    public QuestionStatus getStatus() { return status; }
+    public int getViewCount() { return viewCount; }
+    public List<String> getTags() { return new ArrayList<>(tags); }
+}
+
+class Answer {
+    private String answerId;
+    private String description;
+    private String questionId;
+    private String userId;
+    private LocalDateTime createdAt;
+    private LocalDateTime lastModified;
+    private boolean isAccepted;
+    
+    public Answer(String answerId, String description, String questionId, String userId) {
+        this.answerId = answerId;
+        this.description = description;
+        this.questionId = questionId;
+        this.userId = userId;
+        this.createdAt = LocalDateTime.now();
+        this.lastModified = LocalDateTime.now();
+        this.isAccepted = false;
+    }
+    
+    // ✅ Business logic in entity
+    public void markAsAccepted() {
+        this.isAccepted = true;
+        this.lastModified = LocalDateTime.now();
+    }
+    
+    public void unmarkAsAccepted() {
+        this.isAccepted = false;
+        this.lastModified = LocalDateTime.now();
+    }
+    
+    // Getters
+    public String getAnswerId() { return answerId; }
+    public String getDescription() { return description; }
+    public String getQuestionId() { return questionId; }
+    public String getUserId() { return userId; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getLastModified() { return lastModified; }
+    public boolean isAccepted() { return isAccepted; }
+}
+
+// ✅ NEW: Proper Vote tracking
+class Vote {
+    private String voteId;
+    private String userId;
+    private String targetId; // Question or Answer ID
+    private VoteType voteType;
+    private LocalDateTime createdAt;
+    
+    public Vote(String voteId, String userId, String targetId, VoteType voteType) {
+        this.voteId = voteId;
+        this.userId = userId;
+        this.targetId = targetId;
+        this.voteType = voteType;
+        this.createdAt = LocalDateTime.now();
+    }
+    
+    // Getters
+    public String getVoteId() { return voteId; }
+    public String getUserId() { return userId; }
+    public String getTargetId() { return targetId; }
+    public VoteType getVoteType() { return voteType; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+}
+
+// ✅ NEW: Tag entity
+class Tag {
+    private String tagId;
+    private String name;
+    private String description;
+    private int questionCount;
+    
+    public Tag(String tagId, String name, String description) {
+        this.tagId = tagId;
+        this.name = name.toLowerCase();
+        this.description = description;
+        this.questionCount = 0;
+    }
+    
+    public void incrementQuestionCount() { questionCount++; }
+    public void decrementQuestionCount() { questionCount = Math.max(0, questionCount - 1); }
+    
+    // Getters
+    public String getTagId() { return tagId; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public int getQuestionCount() { return questionCount; }
+}
+
+// ===============================
+// SERVICES
+// ===============================
+
+class UserService {
+    private Map<String, User> users = new HashMap<>();
+    private int userCounter = 1;
+    
+    public String registerUser(String name, String email) {
+        if (isEmailExists(email)) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        
+        String userId = "USER_" + (userCounter++);
+        User user = new User(userId, name, email);
+        users.put(userId, user);
+        
+        System.out.println("✅ User registered: " + name + " (" + email + ")");
+        return userId;
+    }
+    
+    public User getUser(String userId) {
+        return users.get(userId);
+    }
+    
+    public List<User> getTopUsersByReputation(int limit) {
+        return users.values().stream()
+            .sorted((u1, u2) -> Integer.compare(u2.getReputation(), u1.getReputation()))
+            .limit(limit)
+            .collect(Collectors.toList());
+    }
+    
+    private boolean isEmailExists(String email) {
+        return users.values().stream()
+            .anyMatch(user -> user.getEmail().equals(email));
+    }
+    
+    public void updateUserReputation(String userId, int reputationChange) {
+        User user = users.get(userId);
+        if (user != null) {
+            if (reputationChange > 0) {
+                user.addReputation(reputationChange);
+            } else {
+                user.deductReputation(Math.abs(reputationChange));
+            }
+        }
+    }
+}
+
+class QuestionService {
+    private Map<String, Question> questions = new HashMap<>();
+    private int questionCounter = 1;
+    private UserService userService;
+    
+    public QuestionService(UserService userService) {
+        this.userService = userService;
+    }
+    
+    public String askQuestion(String userId, String title, String description, List<String> tags) {
+        User user = userService.getUser(userId);
+        if (user == null || !user.isActive()) {
+            throw new IllegalArgumentException("Invalid or inactive user");
+        }
+        
+        String questionId = "Q_" + (questionCounter++);
+        Question question = new Question(questionId, title, description, userId, tags);
+        questions.put(questionId, question);
+        
+        System.out.println("❓ Question asked by " + user.getName() + ": " + title);
+        return questionId;
+    }
+    
+    public Question getQuestion(String questionId) {
+        return questions.get(questionId);
+    }
+    
+    public void viewQuestion(String questionId) {
+        Question question = questions.get(questionId);
+        if (question != null) {
+            question.incrementViewCount();
+        }
+    }
+    
+    public List<Question> searchQuestions(String keyword) {
+        return questions.values().stream()
+            .filter(q -> q.getTitle().toLowerCase().contains(keyword.toLowerCase()) ||
+                        q.getDescription().toLowerCase().contains(keyword.toLowerCase()))
+            .sorted((q1, q2) -> q2.getCreatedAt().compareTo(q1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+    
+    public List<Question> getQuestionsByTag(String tag) {
+        return questions.values().stream()
+            .filter(q -> q.hasTag(tag))
+            .collect(Collectors.toList());
+    }
+    
+    public List<Question> getQuestionsByUser(String userId) {
+        return questions.values().stream()
+            .filter(q -> q.getUserId().equals(userId))
+            .sorted((q1, q2) -> q2.getCreatedAt().compareTo(q1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+}
+
+class AnswerService {
+    private Map<String, Answer> answers = new HashMap<>();
+    private int answerCounter = 1;
+    private UserService userService;
+    private QuestionService questionService;
+    
+    public AnswerService(UserService userService, QuestionService questionService) {
+        this.userService = userService;
+        this.questionService = questionService;
+    }
+    
+    public String answerQuestion(String userId, String questionId, String description) {
+        User user = userService.getUser(userId);
+        Question question = questionService.getQuestion(questionId);
+        
+        if (user == null || !user.isActive()) {
+            throw new IllegalArgumentException("Invalid or inactive user");
+        }
+        
+        if (question == null || !question.isOpen()) {
+            throw new IllegalArgumentException("Question not found or closed");
+        }
+        
+        String answerId = "A_" + (answerCounter++);
+        Answer answer = new Answer(answerId, description, questionId, userId);
+        answers.put(answerId, answer);
+        
+        System.out.println("💬 Answer provided by " + user.getName() + " for question: " + question.getTitle());
+        return answerId;
+    }
+    
+    public Answer getAnswer(String answerId) {
+        return answers.get(answerId);
+    }
+    
+    public List<Answer> getAnswersForQuestion(String questionId) {
+        return answers.values().stream()
+            .filter(a -> a.getQuestionId().equals(questionId))
+            .sorted((a1, a2) -> a2.getCreatedAt().compareTo(a1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+    
+    public List<Answer> getAnswersByUser(String userId) {
+        return answers.values().stream()
+            .filter(a -> a.getUserId().equals(userId))
+            .sorted((a1, a2) -> a2.getCreatedAt().compareTo(a1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+    
+    public boolean acceptAnswer(String questionOwnerId, String answerId) {
+        Answer answer = answers.get(answerId);
+        if (answer == null) return false;
+        
+        Question question = questionService.getQuestion(answer.getQuestionId());
+        if (question == null || !question.getUserId().equals(questionOwnerId)) {
+            return false;
+        }
+        
+        // Unmark other accepted answers for this question
+        getAnswersForQuestion(question.getQuestionId()).forEach(a -> a.unmarkAsAccepted());
+        
+        // Mark this answer as accepted
+        answer.markAsAccepted();
+        
+        // Give reputation to answer author
+        userService.updateUserReputation(answer.getUserId(), 15);
+        
+        System.out.println("✅ Answer accepted for question: " + question.getTitle());
+        return true;
+    }
+}
+
+class VotingService {
+    private Map<String, Vote> votes = new HashMap<>();
+    private int voteCounter = 1;
+    private UserService userService;
+    private QuestionService questionService;
+    private AnswerService answerService;
+    
+    public VotingService(UserService userService, QuestionService questionService, AnswerService answerService) {
+        this.userService = userService;
+        this.questionService = questionService;
+        this.answerService = answerService;
+    }
+    
+    public boolean voteQuestion(String userId, String questionId, VoteType voteType) {
+        User user = userService.getUser(userId);
+        Question question = questionService.getQuestion(questionId);
+        
+        if (user == null || !user.canVote() || question == null) {
+            return false;
+        }
+        
+        // Check if user already voted on this question
+        String existingVoteId = findExistingVote(userId, questionId);
+        if (existingVoteId != null) {
+            // Remove existing vote
+            votes.remove(existingVoteId);
+        }
+        
+        // Add new vote
+        String voteId = "V_" + (voteCounter++);
+        Vote vote = new Vote(voteId, userId, questionId, voteType);
+        votes.put(voteId, vote);
+        
+        // Update reputation
+        int reputationChange = (voteType == VoteType.UPVOTE) ? 5 : -2;
+        userService.updateUserReputation(question.getUserId(), reputationChange);
+        
+        System.out.println("🗳️  " + user.getName() + " " + voteType.name().toLowerCase() + "d question: " + question.getTitle());
+        return true;
+    }
+    
+    public boolean voteAnswer(String userId, String answerId, VoteType voteType) {
+        User user = userService.getUser(userId);
+        Answer answer = answerService.getAnswer(answerId);
+        
+        if (user == null || !user.canVote() || answer == null) {
+            return false;
+        }
+        
+        // Check if user already voted on this answer
+        String existingVoteId = findExistingVote(userId, answerId);
+        if (existingVoteId != null) {
+            votes.remove(existingVoteId);
+        }
+        
+        // Add new vote
+        String voteId = "V_" + (voteCounter++);
+        Vote vote = new Vote(voteId, userId, answerId, voteType);
+        votes.put(voteId, vote);
+        
+        // Update reputation
+        int reputationChange = (voteType == VoteType.UPVOTE) ? 10 : -2;
+        userService.updateUserReputation(answer.getUserId(), reputationChange);
+        
+        System.out.println("🗳️  " + user.getName() + " " + voteType.name().toLowerCase() + "d an answer");
+        return true;
+    }
+    
+    public int getVoteCount(String targetId) {
+        int upvotes = (int) votes.values().stream()
+            .filter(v -> v.getTargetId().equals(targetId) && v.getVoteType() == VoteType.UPVOTE)
+            .count();
+        
+        int downvotes = (int) votes.values().stream()
+            .filter(v -> v.getTargetId().equals(targetId) && v.getVoteType() == VoteType.DOWNVOTE)
+            .count();
+        
+        return upvotes - downvotes;
+    }
+    
+    private String findExistingVote(String userId, String targetId) {
+        return votes.entrySet().stream()
+            .filter(entry -> entry.getValue().getUserId().equals(userId) && 
+                           entry.getValue().getTargetId().equals(targetId))
+            .map(Map.Entry::getKey)
+            .findFirst()
+            .orElse(null);
+    }
+}
+
+// ===============================
+// FACADE
+// ===============================
+
+class StackOverflowFacade {
+    private UserService userService;
+    private QuestionService questionService;
+    private AnswerService answerService;
+    private VotingService votingService;
+    
+    public StackOverflowFacade() {
+        this.userService = new UserService();
+        this.questionService = new QuestionService(userService);
+        this.answerService = new AnswerService(userService, questionService);
+        this.votingService = new VotingService(userService, questionService, answerService);
+    }
+    
+    // User operations
+    public String registerUser(String name, String email) {
+        return userService.registerUser(name, email);
+    }
+    
+    // Question operations
+    public String askQuestion(String userId, String title, String description, List<String> tags) {
+        return questionService.askQuestion(userId, title, description, tags);
+    }
+    
+    public String answerQuestion(String userId, String questionId, String description) {
+        return answerService.answerQuestion(userId, questionId, description);
+    }
+    
+    // Voting operations
+    public boolean upvoteQuestion(String userId, String questionId) {
+        return votingService.voteQuestion(userId, questionId, VoteType.UPVOTE);
+    }
+    
+    public boolean downvoteQuestion(String userId, String questionId) {
+        return votingService.voteQuestion(userId, questionId, VoteType.DOWNVOTE);
+    }
+    
+    public boolean upvoteAnswer(String userId, String answerId) {
+        return votingService.voteAnswer(userId, answerId, VoteType.UPVOTE);
+    }
+    
+    public boolean downvoteAnswer(String userId, String answerId) {
+        return votingService.voteAnswer(userId, answerId, VoteType.DOWNVOTE);
+    }
+    
+    // Convenience methods
+    public void displayQuestionWithAnswers(String questionId) {
+        questionService.viewQuestion(questionId); // Increment view count
+        
+        Question question = questionService.getQuestion(questionId);
+        if (question == null) return;
+        
+        User questionAuthor = userService.getUser(question.getUserId());
+        int questionVotes = votingService.getVoteCount(questionId);
+        
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("📖 QUESTION: " + question.getTitle());
+        System.out.println("👤 Asked by: " + questionAuthor.getName() + " (Rep: " + questionAuthor.getReputation() + ")");
+        System.out.println("🗳️  Votes: " + questionVotes + " | 👀 Views: " + question.getViewCount());
+        System.out.println("🏷️  Tags: " + String.join(", ", question.getTags()));
+        System.out.println("📝 " + question.getDescription());
+        System.out.println("⏰ " + question.getCreatedAt());
+        
+        List<Answer> answers = answerService.getAnswersForQuestion(questionId);
+        if (!answers.isEmpty()) {
+            System.out.println("\n💬 ANSWERS (" + answers.size() + "):");
+            for (Answer answer : answers) {
+                User answerAuthor = userService.getUser(answer.getUserId());
+                int answerVotes = votingService.getVoteCount(answer.getAnswerId());
+                
+                System.out.println("\n" + "-".repeat(40));
+                System.out.println((answer.isAccepted() ? "✅ [ACCEPTED] " : "") + 
+                                 "Answer by: " + answerAuthor.getName() + 
+                                 " (Rep: " + answerAuthor.getReputation() + ")");
+                System.out.println("🗳️  Votes: " + answerVotes);
+                System.out.println("📝 " + answer.getDescription());
+                System.out.println("⏰ " + answer.getCreatedAt());
+            }
+        } else {
+            System.out.println("\n💬 No answers yet.");
+        }
+        System.out.println("=".repeat(60));
+    }
+    
+    public void displayUserProfile(String userId) {
+        User user = userService.getUser(userId);
+        if (user == null) return;
+        
+        List<Question> userQuestions = questionService.getQuestionsByUser(userId);
+        List<Answer> userAnswers = answerService.getAnswersByUser(userId);
+        
+        System.out.println("\n👤 USER PROFILE: " + user.getName());
+        System.out.println("📧 Email: " + user.getEmail());
+        System.out.println("⭐ Reputation: " + user.getReputation());
+        System.out.println("📅 Joined: " + user.getJoinDate().toLocalDate());
+        System.out.println("❓ Questions: " + userQuestions.size());
+        System.out.println("💬 Answers: " + userAnswers.size());
+    }
+}
+
+// ===============================
+// DEMO
+// ===============================
+
+class StackOverflowDemo {
+    public static void main(String[] args) {
+        System.out.println("🌟 STACK OVERFLOW SYSTEM DEMO 🌟\n");
+        
+        StackOverflowFacade stackoverflow = new StackOverflowFacade();
+        
+        // Register users
+        String user1 = stackoverflow.registerUser("Alice Johnson", "alice@email.com");
+        String user2 = stackoverflow.registerUser("Bob Smith", "bob@email.com");
+        String user3 = stackoverflow.registerUser("Charlie Brown", "charlie@email.com");
+        
+        // Give some initial reputation so they can vote
+        stackoverflow.userService.updateUserReputation(user1, 50);
+        stackoverflow.userService.updateUserReputation(user2, 50);
+        stackoverflow.userService.updateUserReputation(user3, 50);
+        
+        System.out.println();
+        
+        // Ask questions
+        String q1 = stackoverflow.askQuestion(user1, 
+            "How to reverse a string in Java?", 
+            "I need to reverse a string without using built-in functions. What's the best approach?",
+            Arrays.asList("java", "string", "algorithms"));
+            
+        String q2 = stackoverflow.askQuestion(user2,
+            "What is dependency injection?",
+            "Can someone explain dependency injection in simple terms with examples?",
+            Arrays.asList("design-patterns", "dependency-injection", "java"));
+        
+        System.out.println();
+        
+        // Answer questions
+        String a1 = stackoverflow.answerQuestion(user2, q1, 
+            "You can use a StringBuilder and iterate backwards through the string, or use recursion. Here's a simple approach:\n\n" +
+            "public static String reverse(String str) {\n" +
+            "    StringBuilder sb = new StringBuilder();\n" +
+            "    for (int i = str.length() - 1; i >= 0; i--) {\n" +
+            "        sb.append(str.charAt(i));\n" +
+            "    }\n" +
+            "    return sb.toString();\n" +
+            "}");
+            
+        String a2 = stackoverflow.answerQuestion(user3, q1,
+            "Another approach using character array:\n\n" +
+            "public static String reverse(String str) {\n" +
+            "    char[] chars = str.toCharArray();\n" +
+            "    int left = 0, right = chars.length - 1;\n" +
+            "    while (left < right) {\n" +
+            "        char temp = chars[left];\n" +
+            "        chars[left] = chars[right];\n" +
+            "        chars[right] = temp;\n" +
+            "        left++; right--;\n" +
+            "    }\n" +
+            "    return new String(chars);\n" +
+            "}");
+        
+        System.out.println();
+        
+        // Vote on questions and answers
+        stackoverflow.upvoteQuestion(user2, q1);
+        stackoverflow.upvoteQuestion(user3, q1);
+        stackoverflow.upvoteAnswer(user1, a1);
+        stackoverflow.upvoteAnswer(user3, a1);
+        stackoverflow.upvoteAnswer(user1, a2);
+        
+        System.out.println();
+        
+        // Accept answer
+        stackoverflow.answerService.acceptAnswer(user1, a1);
+        
+        System.out.println();
+        
+        // Display question with answers
+        stackoverflow.displayQuestionWithAnswers(q1);
+        
+        System.out.println();
+        
+        // Display user profiles
+        stackoverflow.displayUserProfile(user1);
+        stackoverflow.displayUserProfile(user2);
+        
+        System.out.println("\n🎉 Demo completed!");
+    }
+}
+
+Design Stack Overflow.
+User:
+registers into the system, can ask a question, can upvote/downvote questions, can also answer questions
+
+User:
+userid
+name
+email
+List<Questions>
+List<Answers>
+
+User Service:
+register user
+Ask a question
+Answer a question
+Upvote question
+Upvote answer
+Downvote question
+Downvote answer
+
+Question:
+Description:String
+Tags:
+Status:
+List<Answers>
+Votes: int
+
+Question service:
+add a question to the list of questions
+
+Answer:
+Description: String
+Votes:int
+
+How is this design for stack overflow, pleaase code it up in java, also suggest me improvements on this
+
+
+Your design is a good start! Let me code it up and then suggest several important improvements. I'll show both your original approach and an enhanced version.
+
+I've implemented your Stack Overflow design and created an improved version. Here's the analysis:
+🚨 Issues with Your Original Design
+1. Tight Coupling & Memory Issues
+2. Inadequate Vote Tracking
+
+
+// LEARN ABOUT ANAEMIC DOMAIN MODEL AND RICH DOMAIN MODEL
