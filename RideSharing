@@ -1,0 +1,607 @@
+// Enums
+enum VehicleType {
+    CAR, AUTO, BIKE
+}
+
+enum RideStatus {
+    REQUESTED, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED
+}
+
+enum DriverStatus {
+    AVAILABLE, BUSY, OFFLINE
+}
+
+// Entities
+class Location {
+    private double latitude;
+    private double longitude;
+    private String address;
+    
+    public Location(double latitude, double longitude, String address) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.address = address;
+    }
+    
+    // Getters
+    public double getLatitude() { return latitude; }
+    public double getLongitude() { return longitude; }
+    public String getAddress() { return address; }
+    
+    @Override
+    public String toString() {
+        return address + " (" + latitude + ", " + longitude + ")";
+    }
+}
+
+class Vehicle {
+    private String vehicleId;
+    private VehicleType type;
+    private String licensePlate;
+    private String model;
+    
+    public Vehicle(String vehicleId, VehicleType type, String licensePlate, String model) {
+        this.vehicleId = vehicleId;
+        this.type = type;
+        this.licensePlate = licensePlate;
+        this.model = model;
+    }
+    
+    // Getters
+    public String getVehicleId() { return vehicleId; }
+    public VehicleType getType() { return type; }
+    public String getLicensePlate() { return licensePlate; }
+    public String getModel() { return model; }
+}
+
+class Rider {
+    private String riderId;
+    private String name;
+    private String phoneNumber;
+    private double rating;
+    
+    public Rider(String riderId, String name, String phoneNumber) {
+        this.riderId = riderId;
+        this.name = name;
+        this.phoneNumber = phoneNumber;
+        this.rating = 5.0;
+    }
+    
+    // Getters
+    public String getRiderId() { return riderId; }
+    public String getName() { return name; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public double getRating() { return rating; }
+}
+
+class Driver {
+    private String driverId;
+    private String name;
+    private String phoneNumber;
+    private Vehicle vehicle;
+    private Location currentLocation;
+    private DriverStatus status;
+    private double rating;
+    
+    public Driver(String driverId, String name, String phoneNumber, Vehicle vehicle, Location currentLocation) {
+        this.driverId = driverId;
+        this.name = name;
+        this.phoneNumber = phoneNumber;
+        this.vehicle = vehicle;
+        this.currentLocation = currentLocation;
+        this.status = DriverStatus.AVAILABLE;
+        this.rating = 5.0;
+    }
+    
+    // Getters and Setters
+    public String getDriverId() { return driverId; }
+    public String getName() { return name; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public Vehicle getVehicle() { return vehicle; }
+    public Location getCurrentLocation() { return currentLocation; }
+    public DriverStatus getStatus() { return status; }
+    public double getRating() { return rating; }
+    
+    public void setCurrentLocation(Location location) { this.currentLocation = location; }
+    public void setStatus(DriverStatus status) { this.status = status; }
+}
+
+class RideRequest {
+    private String requestId;
+    private String riderId;
+    private Location source;
+    private Location destination;
+    private VehicleType vehicleType;
+    private RideStatus status;
+    private String assignedDriverId;
+    private double estimatedFare;
+    private long requestTime;
+    
+    public RideRequest(String requestId, String riderId, Location source, Location destination, VehicleType vehicleType) {
+        this.requestId = requestId;
+        this.riderId = riderId;
+        this.source = source;
+        this.destination = destination;
+        this.vehicleType = vehicleType;
+        this.status = RideStatus.REQUESTED;
+        this.requestTime = System.currentTimeMillis();
+    }
+    
+    // Getters and Setters
+    public String getRequestId() { return requestId; }
+    public String getRiderId() { return riderId; }
+    public Location getSource() { return source; }
+    public Location getDestination() { return destination; }
+    public VehicleType getVehicleType() { return vehicleType; }
+    public RideStatus getStatus() { return status; }
+    public String getAssignedDriverId() { return assignedDriverId; }
+    public double getEstimatedFare() { return estimatedFare; }
+    public long getRequestTime() { return requestTime; }
+    
+    public void setStatus(RideStatus status) { this.status = status; }
+    public void setAssignedDriverId(String driverId) { this.assignedDriverId = driverId; }
+    public void setEstimatedFare(double fare) { this.estimatedFare = fare; }
+}
+
+class RideOption {
+    private VehicleType vehicleType;
+    private double estimatedFare;
+    private int estimatedTime; // in minutes
+    private int availableDrivers;
+    
+    public RideOption(VehicleType vehicleType, double estimatedFare, int estimatedTime, int availableDrivers) {
+        this.vehicleType = vehicleType;
+        this.estimatedFare = estimatedFare;
+        this.estimatedTime = estimatedTime;
+        this.availableDrivers = availableDrivers;
+    }
+    
+    // Getters
+    public VehicleType getVehicleType() { return vehicleType; }
+    public double getEstimatedFare() { return estimatedFare; }
+    public int getEstimatedTime() { return estimatedTime; }
+    public int getAvailableDrivers() { return availableDrivers; }
+    
+    @Override
+    public String toString() {
+        return vehicleType + " - Fare: $" + estimatedFare + ", Time: " + estimatedTime + " min, Available: " + availableDrivers;
+    }
+}
+
+// Services
+import java.util.*;
+import java.util.stream.Collectors;
+
+class DriverService {
+    private Map<String, Driver> drivers;
+    
+    public DriverService() {
+        this.drivers = new HashMap<>();
+    }
+    
+    public void addDriver(Driver driver) {
+        drivers.put(driver.getDriverId(), driver);
+    }
+    
+    public List<Driver> findAvailableDrivers(Location riderLocation, VehicleType vehicleType, double radiusKm) {
+        return drivers.values().stream()
+            .filter(driver -> driver.getStatus() == DriverStatus.AVAILABLE)
+            .filter(driver -> driver.getVehicle().getType() == vehicleType)
+            .filter(driver -> calculateDistance(riderLocation, driver.getCurrentLocation()) <= radiusKm)
+            .sorted((d1, d2) -> Double.compare(
+                calculateDistance(riderLocation, d1.getCurrentLocation()),
+                calculateDistance(riderLocation, d2.getCurrentLocation())
+            ))
+            .collect(Collectors.toList());
+    }
+    
+    public Driver getDriver(String driverId) {
+        return drivers.get(driverId);
+    }
+    
+    public int getAvailableDriverCount(Location location, VehicleType vehicleType, double radiusKm) {
+        return findAvailableDrivers(location, vehicleType, radiusKm).size();
+    }
+    
+    private double calculateDistance(Location loc1, Location loc2) {
+        // Simplified distance calculation (in reality, would use proper geo calculations)
+        double latDiff = loc1.getLatitude() - loc2.getLatitude();
+        double lonDiff = loc1.getLongitude() - loc2.getLongitude();
+        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111; // Rough km conversion
+    }
+}
+
+class NotificationService {
+    public void notifyDriver(Driver driver, RideRequest request) {
+        System.out.println("📱 Notification sent to " + driver.getName() + 
+            " for ride request " + request.getRequestId());
+        System.out.println("   From: " + request.getSource().getAddress());
+        System.out.println("   To: " + request.getDestination().getAddress());
+        System.out.println("   Fare: $" + request.getEstimatedFare());
+    }
+    
+    public void notifyRider(String riderId, String message) {
+        System.out.println("📱 Notification to Rider " + riderId + ": " + message);
+    }
+}
+
+class FareCalculator {
+    private static final double BASE_FARE_CAR = 5.0;
+    private static final double BASE_FARE_AUTO = 3.0;
+    private static final double BASE_FARE_BIKE = 2.0;
+    private static final double RATE_PER_KM = 1.5;
+    
+    public static double calculateFare(VehicleType vehicleType, double distanceKm) {
+        double baseFare = switch (vehicleType) {
+            case CAR -> BASE_FARE_CAR;
+            case AUTO -> BASE_FARE_AUTO;
+            case BIKE -> BASE_FARE_BIKE;
+        };
+        return baseFare + (distanceKm * RATE_PER_KM);
+    }
+}
+
+class RideService {
+    private DriverService driverService;
+    private NotificationService notificationService;
+    private Map<String, RideRequest> rideRequests;
+    private Random random;
+    
+    public RideService(DriverService driverService, NotificationService notificationService) {
+        this.driverService = driverService;
+        this.notificationService = notificationService;
+        this.rideRequests = new HashMap<>();
+        this.random = new Random();
+    }
+    
+    public List<RideOption> getRideOptions(Location source, Location destination) {
+        List<RideOption> options = new ArrayList<>();
+        double distance = calculateDistance(source, destination);
+        
+        for (VehicleType vehicleType : VehicleType.values()) {
+            double fare = FareCalculator.calculateFare(vehicleType, distance);
+            int estimatedTime = (int) (distance / getAverageSpeed(vehicleType) * 60); // minutes
+            int availableDrivers = driverService.getAvailableDriverCount(source, vehicleType, 10.0);
+            
+            options.add(new RideOption(vehicleType, fare, estimatedTime, availableDrivers));
+        }
+        
+        return options;
+    }
+    
+    public String requestRide(Rider rider, Location source, Location destination, VehicleType vehicleType) {
+        String requestId = "REQ_" + System.currentTimeMillis();
+        RideRequest request = new RideRequest(requestId, rider.getRiderId(), source, destination, vehicleType);
+        
+        double distance = calculateDistance(source, destination);
+        double fare = FareCalculator.calculateFare(vehicleType, distance);
+        request.setEstimatedFare(fare);
+        
+        rideRequests.put(requestId, request);
+        
+        // Find and notify available drivers
+        List<Driver> availableDrivers = driverService.findAvailableDrivers(source, vehicleType, 10.0);
+        
+        if (availableDrivers.isEmpty()) {
+            notificationService.notifyRider(rider.getRiderId(), "No drivers available for your ride type.");
+            return null;
+        }
+        
+        // Notify top 3 closest drivers
+        int driversToNotify = Math.min(3, availableDrivers.size());
+        for (int i = 0; i < driversToNotify; i++) {
+            notificationService.notifyDriver(availableDrivers.get(i), request);
+        }
+        
+        notificationService.notifyRider(rider.getRiderId(), 
+            "Ride requested! Notifying " + driversToNotify + " nearby drivers.");
+        
+        return requestId;
+    }
+    
+    public boolean acceptRide(String driverId, String requestId) {
+        RideRequest request = rideRequests.get(requestId);
+        Driver driver = driverService.getDriver(driverId);
+        
+        if (request == null || driver == null || request.getStatus() != RideStatus.REQUESTED) {
+            return false;
+        }
+        
+        request.setStatus(RideStatus.ACCEPTED);
+        request.setAssignedDriverId(driverId);
+        driver.setStatus(DriverStatus.BUSY);
+        
+        notificationService.notifyRider(request.getRiderId(), 
+            "Your ride has been accepted by " + driver.getName() + 
+            " (" + driver.getVehicle().getModel() + " - " + driver.getVehicle().getLicensePlate() + ")");
+        
+        return true;
+    }
+    
+    public boolean rejectRide(String driverId, String requestId) {
+        // In a real system, you might track rejections and notify other drivers
+        System.out.println("Driver " + driverId + " rejected ride " + requestId);
+        return true;
+    }
+    
+    public RideRequest getRideRequest(String requestId) {
+        return rideRequests.get(requestId);
+    }
+    
+    private double calculateDistance(Location loc1, Location loc2) {
+        double latDiff = loc1.getLatitude() - loc2.getLatitude();
+        double lonDiff = loc1.getLongitude() - loc2.getLongitude();
+        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111; // Rough km conversion
+    }
+    
+    private double getAverageSpeed(VehicleType vehicleType) {
+        return switch (vehicleType) {
+            case CAR -> 30.0; // km/h
+            case AUTO -> 25.0;
+            case BIKE -> 40.0;
+        };
+    }
+}
+
+// Facade Class
+class RideSharingFacade {
+    private RideService rideService;
+    private DriverService driverService;
+    private NotificationService notificationService;
+    
+    public RideSharingFacade() {
+        this.driverService = new DriverService();
+        this.notificationService = new NotificationService();
+        this.rideService = new RideService(driverService, notificationService);
+    }
+    
+    // Driver Management
+    public void registerDriver(String driverId, String name, String phone, Vehicle vehicle, Location location) {
+        Driver driver = new Driver(driverId, name, phone, vehicle, location);
+        driverService.addDriver(driver);
+        System.out.println("✅ Driver " + name + " registered successfully");
+    }
+    
+    public void updateDriverLocation(String driverId, Location newLocation) {
+        Driver driver = driverService.getDriver(driverId);
+        if (driver != null) {
+            driver.setCurrentLocation(newLocation);
+            System.out.println("📍 Driver " + driver.getName() + " location updated");
+        }
+    }
+    
+    public void setDriverAvailability(String driverId, DriverStatus status) {
+        Driver driver = driverService.getDriver(driverId);
+        if (driver != null) {
+            driver.setStatus(status);
+            System.out.println("🚗 Driver " + driver.getName() + " is now " + status);
+        }
+    }
+    
+    // Ride Operations
+    public List<RideOption> getAvailableRides(Location source, Location destination) {
+        return rideService.getRideOptions(source, destination);
+    }
+    
+    public String bookRide(Rider rider, Location source, Location destination, VehicleType vehicleType) {
+        return rideService.requestRide(rider, source, destination, vehicleType);
+    }
+    
+    public boolean confirmRide(String driverId, String requestId) {
+        return rideService.acceptRide(driverId, requestId);
+    }
+    
+    public boolean cancelRideByDriver(String driverId, String requestId) {
+        return rideService.rejectRide(driverId, requestId);
+    }
+    
+    public RideRequest getRideDetails(String requestId) {
+        return rideService.getRideRequest(requestId);
+    }
+    
+    // Convenience Methods
+    public void completeRideWorkflow(Rider rider, Location source, Location destination, 
+                                   VehicleType vehicleType, String acceptingDriverId) {
+        System.out.println("\n🚀 Starting complete ride workflow...");
+        
+        // Step 1: Show options
+        List<RideOption> options = getAvailableRides(source, destination);
+        System.out.println("Available options:");
+        options.forEach(option -> System.out.println("  " + option));
+        
+        // Step 2: Book ride
+        String requestId = bookRide(rider, source, destination, vehicleType);
+        if (requestId == null) {
+            System.out.println("❌ Ride booking failed");
+            return;
+        }
+        
+        // Step 3: Accept ride
+        boolean accepted = confirmRide(acceptingDriverId, requestId);
+        if (accepted) {
+            System.out.println("✅ Ride workflow completed successfully!");
+        } else {
+            System.out.println("❌ Ride acceptance failed");
+        }
+    }
+    
+    // System Status
+    public void printSystemStatus() {
+        System.out.println("\n📊 SYSTEM STATUS:");
+        System.out.println("Available Drivers by Type:");
+        
+        Location sampleLocation = new Location(12.9716, 77.5946, "Sample Location");
+        for (VehicleType type : VehicleType.values()) {
+            int count = driverService.getAvailableDriverCount(sampleLocation, type, 50.0);
+            System.out.println("  " + type + ": " + count + " drivers");
+        }
+    }
+}
+
+// Demo Class
+class RideSharingDemo {
+    public static void main(String[] args) {
+        System.out.println("=== RIDE SHARING APP DEMO ===\n");
+        
+        // Demo 1: Using Facade Pattern
+        System.out.println("🎭 DEMO 1: USING FACADE PATTERN");
+        demoWithFacade();
+        
+        System.out.println("\n" + "=".repeat(50) + "\n");
+        
+        // Demo 2: Using Direct Services (Traditional approach)
+        System.out.println("🔧 DEMO 2: USING DIRECT SERVICES");
+        demoWithDirectServices();
+    }
+    
+    private static void demoWithFacade() {
+        // Initialize facade
+        RideSharingFacade rideFacade = new RideSharingFacade();
+        
+        // Create locations
+        Location airportLocation = new Location(12.9716, 77.5946, "Bangalore Airport");
+        Location mallLocation = new Location(12.9279, 77.6271, "UB City Mall");
+        
+        // Register drivers using facade - much simpler!
+        Vehicle car1 = new Vehicle("V001", VehicleType.CAR, "KA01AB1234", "Toyota Innova");
+        rideFacade.registerDriver("D001", "Rajesh Kumar", "+91-9876543210", car1, airportLocation);
+        
+        Vehicle auto1 = new Vehicle("V002", VehicleType.AUTO, "KA02CD5678", "Bajaj Auto");
+        rideFacade.registerDriver("D002", "Suresh Babu", "+91-9876543211", auto1, mallLocation);
+        
+        // Create rider
+        Rider rider = new Rider("R001", "Priya Sharma", "+91-9876543213");
+        
+        // Complete ride workflow in one method call
+        rideFacade.completeRideWorkflow(rider, airportLocation, mallLocation, VehicleType.CAR, "D001");
+        
+        // Check system status
+        rideFacade.printSystemStatus();
+    }
+    
+    private static void demoWithDirectServices() {
+        // Initialize services manually - more complex setup
+        DriverService driverService = new DriverService();
+        NotificationService notificationService = new NotificationService();
+        RideService rideService = new RideService(driverService, notificationService);
+        
+        // Create locations
+        Location airportLocation = new Location(12.9716, 77.5946, "Bangalore Airport");
+        Location mallLocation = new Location(12.9279, 77.6271, "UB City Mall");
+        Location stationLocation = new Location(12.9767, 77.5993, "Bangalore City Railway Station");
+        
+        // Create and add drivers manually - more verbose
+        Vehicle car1 = new Vehicle("V001", VehicleType.CAR, "KA01AB1234", "Toyota Innova");
+        Driver driver1 = new Driver("D001", "Rajesh Kumar", "+91-9876543210", car1, airportLocation);
+        
+        Vehicle auto1 = new Vehicle("V002", VehicleType.AUTO, "KA02CD5678", "Bajaj Auto");
+        Driver driver2 = new Driver("D002", "Suresh Babu", "+91-9876543211", auto1, mallLocation);
+        
+        Vehicle bike1 = new Vehicle("V003", VehicleType.BIKE, "KA03EF9012", "Royal Enfield");
+        Driver driver3 = new Driver("D003", "Amit Singh", "+91-9876543212", bike1, stationLocation);
+        
+        driverService.addDriver(driver1);
+        driverService.addDriver(driver2);
+        driverService.addDriver(driver3);
+        
+        // Create rider
+        Rider rider = new Rider("R001", "Priya Sharma", "+91-9876543213");
+        
+        // Manual step-by-step process - more control but more complex
+        System.out.println("1. Rider checking ride options from Airport to UB City Mall:");
+        List<RideOption> options = rideService.getRideOptions(airportLocation, mallLocation);
+        
+        for (RideOption option : options) {
+            System.out.println("   " + option);
+        }
+        
+        System.out.println("\n2. Rider selects CAR and requests ride:");
+        String requestId = rideService.requestRide(rider, airportLocation, mallLocation, VehicleType.CAR);
+        
+        if (requestId != null) {
+            System.out.println("   Ride request created: " + requestId);
+        }
+        
+        System.out.println("\n3. Driver " + driver1.getName() + " accepts the ride:");
+        boolean accepted = rideService.acceptRide(driver1.getDriverId(), requestId);
+        
+        if (accepted) {
+            System.out.println("   ✅ Ride accepted successfully!");
+            RideRequest request = rideService.getRideRequest(requestId);
+            System.out.println("   Ride Status: " + request.getStatus());
+            System.out.println("   Assigned Driver: " + request.getAssignedDriverId());
+        }
+        
+        System.out.println("\n4. Another rider requests AUTO from Mall to Station:");
+        Rider rider2 = new Rider("R002", "Vikram Reddy", "+91-9876543214");
+        String requestId2 = rideService.requestRide(rider2, mallLocation, stationLocation, VehicleType.AUTO);
+        
+        System.out.println("\n5. Driver " + driver2.getName() + " rejects the ride:");
+        rideService.rejectRide(driver2.getDriverId(), requestId2);
+        
+        System.out.println("\n=== DEMO COMPLETED ===");
+    }
+}
+
+Can we have a facade class here that combines methods of different classes. What are the upside and downsides for doing that?
+
+Perfect! I've added a RideSharingFacade class that combines methods from different services. The demo now shows both approaches side by side. Here's the analysis of upsides and downsides:
+🚀 Upsides of Using Facade Pattern
+1. Simplified Interface
+2. Loose Coupling
+
+Clients don't need to know about DriverService, RideService, NotificationService
+Changes in internal service structure don't affect client code
+Single entry point for all operations
+
+3. Enhanced Usability
+
+completeRideWorkflow() handles entire process in one call
+Built-in convenience methods like printSystemStatus()
+Less boilerplate code for common operations
+
+4. Better Encapsulation
+
+Hides complex service interactions
+Manages service dependencies internally
+Provides logical grouping of related operations
+
+5. Easier Testing & Mocking
+
+Mock single facade instead of multiple services
+Cleaner unit tests with less setup
+
+⚠️ Downsides of Using Facade Pattern
+1. Risk of "God Class"
+
+Facade can become too large if all functionality is added
+Violates Single Responsibility Principle if not carefully designed
+Can become a maintenance nightmare
+
+2. Reduced Flexibility
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
