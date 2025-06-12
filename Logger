@@ -1,0 +1,552 @@
+// 1. LogLevel enum
+public enum LogLevel {
+    DEBUG(1),
+    INFO(2),
+    WARNING(3),
+    ERROR(4),
+    FATAL(5);
+    
+    private final int priority;
+    
+    LogLevel(int priority) {
+        this.priority = priority;
+    }
+    
+    public int getPriority() {
+        return priority;
+    }
+    
+    public boolean isEnabledFor(LogLevel level) {
+        return this.priority <= level.priority;
+    }
+}
+
+// 2. LogMessage class
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class LogMessage {
+    private final LocalDateTime timestamp;
+    private final LogLevel level;
+    private final String message;
+    
+    public LogMessage(LogLevel level, String message) {
+        this.timestamp = LocalDateTime.now();
+        this.level = level;
+        this.message = message;
+    }
+    
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+    
+    public LogLevel getLevel() {
+        return level;
+    }
+    
+    public String getMessage() {
+        return message;
+    }
+    
+    @Override
+    public String toString() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        return String.format("[%s] %s: %s", 
+            timestamp.format(formatter), 
+            level.name(), 
+            message);
+    }
+}
+
+// 3. LogAppender interface
+public interface LogAppender {
+    void append(LogMessage logMessage);
+    void close();
+}
+
+// 4. ConsoleAppender class
+public class ConsoleAppender implements LogAppender {
+    @Override
+    public void append(LogMessage logMessage) {
+        System.out.println(logMessage.toString());
+    }
+    
+    @Override
+    public void close() {
+        // Nothing to close for console
+    }
+}
+
+// 5. FileAppender class
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class FileAppender implements LogAppender {
+    private final String fileName;
+    private PrintWriter writer;
+    
+    public FileAppender(String fileName) {
+        this.fileName = fileName;
+        try {
+            // Create directory if it doesn't exist
+            Files.createDirectories(Paths.get(fileName).getParent());
+            this.writer = new PrintWriter(new FileWriter(fileName, true));
+        } catch (IOException e) {
+            System.err.println("Failed to initialize FileAppender: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public synchronized void append(LogMessage logMessage) {
+        if (writer != null) {
+            writer.println(logMessage.toString());
+            writer.flush();
+        }
+    }
+    
+    @Override
+    public void close() {
+        if (writer != null) {
+            writer.close();
+        }
+    }
+}
+
+// 6. DatabaseAppender class
+import java.sql.*;
+
+public class DatabaseAppender implements LogAppender {
+    private final String jdbcUrl;
+    private final String username;
+    private final String password;
+    private Connection connection;
+    
+    public DatabaseAppender(String jdbcUrl, String username, String password) {
+        this.jdbcUrl = jdbcUrl;
+        this.username = username;
+        this.password = password;
+        initializeDatabase();
+    }
+    
+    private void initializeDatabase() {
+        try {
+            connection = DriverManager.getConnection(jdbcUrl, username, password);
+            createTableIfNotExists();
+        } catch (SQLException e) {
+            System.err.println("Failed to initialize DatabaseAppender: " + e.getMessage());
+        }
+    }
+    
+    private void createTableIfNotExists() throws SQLException {
+        String createTableSQL = """
+            CREATE TABLE IF NOT EXISTS logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                timestamp VARCHAR(50),
+                level VARCHAR(10),
+                message TEXT
+            )
+            """;
+        
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(createTableSQL);
+        }
+    }
+    
+    @Override
+    public synchronized void append(LogMessage logMessage) {
+        if (connection == null) return;
+        
+        String insertSQL = "INSERT INTO logs (timestamp, level, message) VALUES (?, ?, ?)";
+        
+        try (PreparedStatement pstmt = connection.prepareStatement(insertSQL)) {
+            pstmt.setString(1, logMessage.getTimestamp().toString());
+            pstmt.setString(2, logMessage.getLevel().name());
+            pstmt.setString(3, logMessage.getMessage());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("Failed to insert log message: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public void close() {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                System.err.println("Failed to close database connection: " + e.getMessage());
+            }
+        }
+    }
+}
+
+// 7. LoggerConfig class
+public class LoggerConfig {
+    private LogLevel logLevel;
+    private LogAppender appender;
+    
+    public LoggerConfig(LogLevel logLevel, LogAppender appender) {
+        this.logLevel = logLevel;
+        this.appender = appender;
+    }
+    
+    public LogLevel getLogLevel() {
+        return logLevel;
+    }
+    
+    public void setLogLevel(LogLevel logLevel) {
+        this.logLevel = logLevel;
+    }
+    
+    public LogAppender getAppender() {
+        return appender;
+    }
+    
+    public void setAppender(LogAppender appender) {
+        // Close previous appender if exists
+        if (this.appender != null) {
+            this.appender.close();
+        }
+        this.appender = appender;
+    }
+}
+
+// 8. Logger class (Singleton)
+public class Logger {
+    private static volatile Logger instance;
+    private LoggerConfig config;
+    
+    private Logger() {
+        // Default configuration
+        this.config = new LoggerConfig(LogLevel.INFO, new ConsoleAppender());
+    }
+    
+    public static Logger getInstance() {
+        if (instance == null) {
+            synchronized (Logger.class) {
+                if (instance == null) {
+                    instance = new Logger();
+                }
+            }
+        }
+        return instance;
+    }
+    
+    public synchronized void setConfig(LoggerConfig config) {
+        this.config = config;
+    }
+    
+    public LoggerConfig getConfig() {
+        return config;
+    }
+    
+    public void log(LogLevel level, String message) {
+        if (config.getLogLevel().isEnabledFor(level)) {
+            LogMessage logMessage = new LogMessage(level, message);
+            config.getAppender().append(logMessage);
+        }
+    }
+    
+    public void debug(String message) {
+        log(LogLevel.DEBUG, message);
+    }
+    
+    public void info(String message) {
+        log(LogLevel.INFO, message);
+    }
+    
+    public void warning(String message) {
+        log(LogLevel.WARNING, message);
+    }
+    
+    public void error(String message) {
+        log(LogLevel.ERROR, message);
+    }
+    
+    public void fatal(String message) {
+        log(LogLevel.FATAL, message);
+    }
+    
+    public void shutdown() {
+        if (config.getAppender() != null) {
+            config.getAppender().close();
+        }
+    }
+}
+
+// 9. LoggingExample class
+import java.util.concurrent.*;
+import java.util.List;
+import java.util.ArrayList;
+
+public class LoggingExample {
+    
+    public static void main(String[] args) throws InterruptedException {
+        Logger logger = Logger.getInstance();
+        
+        // Example 1: Basic logging with default console appender
+        System.out.println("=== Example 1: Console Logging ===");
+        logger.info("Application started");
+        logger.debug("This debug message won't appear (log level is INFO)");
+        logger.warning("This is a warning message");
+        logger.error("This is an error message");
+        logger.fatal("This is a fatal message");
+        
+        // Example 2: Change log level to DEBUG
+        System.out.println("\n=== Example 2: Debug Level Logging ===");
+        logger.setConfig(new LoggerConfig(LogLevel.DEBUG, new ConsoleAppender()));
+        logger.debug("Now debug messages will appear");
+        logger.info("Info message");
+        
+        // Example 3: File logging
+        System.out.println("\n=== Example 3: File Logging ===");
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new FileAppender("logs/application.log")));
+        logger.info("This message goes to file");
+        logger.error("This error goes to file");
+        System.out.println("Messages logged to file: logs/application.log");
+        
+        // Example 4: Database logging (uncomment if you have a database)
+        System.out.println("\n=== Example 4: Database Logging ===");
+        /*
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, 
+            new DatabaseAppender("jdbc:mysql://localhost:3306/testdb", "user", "password")));
+        logger.info("This message goes to database");
+        logger.error("This error goes to database");
+        */
+        System.out.println("Database logging example (commented out)");
+        
+        // Example 5: Multi-threaded logging using ExecutorService
+        System.out.println("\n=== Example 5: Multi-threaded Logging with ExecutorService ===");
+        logger.setConfig(new LoggerConfig(LogLevel.DEBUG, new ConsoleAppender()));
+        
+        // Create ExecutorService with fixed thread pool
+        ExecutorService executor = Executors.newFixedThreadPool(5);
+        List<Future<?>> futures = new ArrayList<>();
+        
+        // Submit tasks to executor
+        for (int i = 0; i < 5; i++) {
+            final int threadId = i;
+            Future<?> future = executor.submit(() -> {
+                for (int j = 0; j < 3; j++) {
+                    logger.info("Thread " + threadId + " - Message " + j);
+                    logger.debug("Thread " + threadId + " - Debug " + j);
+                    try {
+                        Thread.sleep(10); // Small delay to see interleaving
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+            futures.add(future);
+        }
+        
+        // Wait for all tasks to complete
+        for (Future<?> future : futures) {
+            try {
+                future.get(); // Wait for completion
+            } catch (ExecutionException e) {
+                System.err.println("Task execution failed: " + e.getMessage());
+            }
+        }
+        
+        // Shutdown executor
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
+        // Example 6: Different ExecutorService types
+        System.out.println("\n=== Example 6: Different ExecutorService Types ===");
+        
+        // Test with CachedThreadPool
+        System.out.println("Using CachedThreadPool:");
+        ExecutorService cachedExecutor = Executors.newCachedThreadPool();
+        
+        for (int i = 0; i < 3; i++) {
+            final int taskId = i;
+            cachedExecutor.submit(() -> {
+                logger.info("CachedThreadPool - Task " + taskId);
+            });
+        }
+        
+        cachedExecutor.shutdown();
+        cachedExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        
+        // Test with ScheduledThreadPool
+        System.out.println("Using ScheduledThreadPool:");
+        ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(2);
+        
+        // Schedule tasks with delay
+        for (int i = 0; i < 3; i++) {
+            final int taskId = i;
+            scheduledExecutor.schedule(() -> {
+                logger.info("ScheduledThreadPool - Delayed Task " + taskId);
+            }, i * 500, TimeUnit.MILLISECONDS);
+        }
+        
+        scheduledExecutor.shutdown();
+        scheduledExecutor.awaitTermination(3, TimeUnit.SECONDS);
+        
+        // Example 7: Changing configuration at runtime
+        System.out.println("\n=== Example 7: Runtime Configuration Change ===");
+        logger.info("Logging to console");
+        
+        // Switch to file appender
+        logger.setConfig(new LoggerConfig(LogLevel.WARNING, new FileAppender("logs/runtime.log")));
+        logger.info("This info message won't appear (log level is WARNING)");
+        logger.warning("This warning goes to file");
+        logger.error("This error goes to file");
+        
+        // Switch back to console
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new ConsoleAppender()));
+        logger.info("Back to console logging");
+        
+        // Clean up
+        logger.shutdown();
+        System.out.println("\nLogging framework shutdown complete.");
+    }
+}
+
+// Additional utility class for testing different scenarios
+import java.util.concurrent.*;
+import java.util.List;
+import java.util.ArrayList;
+
+public class LoggingTest {
+    
+    public static void testLogLevels() {
+        System.out.println("=== Testing Log Levels ===");
+        Logger logger = Logger.getInstance();
+        
+        // Test with different log levels
+        LogLevel[] levels = {LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARNING, LogLevel.ERROR};
+        
+        for (LogLevel level : levels) {
+            System.out.println("\nSetting log level to: " + level);
+            logger.setConfig(new LoggerConfig(level, new ConsoleAppender()));
+            
+            logger.debug("Debug message");
+            logger.info("Info message");
+            logger.warning("Warning message");
+            logger.error("Error message");
+            logger.fatal("Fatal message");
+        }
+    }
+    
+    public static void testAppenders() {
+        System.out.println("=== Testing Different Appenders ===");
+        Logger logger = Logger.getInstance();
+        
+        // Test Console Appender
+        System.out.println("\nConsole Appender:");
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new ConsoleAppender()));
+        logger.info("Message to console");
+        
+        // Test File Appender
+        System.out.println("\nFile Appender:");
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new FileAppender("logs/test.log")));
+        logger.info("Message to file");
+        logger.error("Error message to file");
+        
+        System.out.println("Check logs/test.log for file output");
+        
+        logger.shutdown();
+    }
+    
+    public static void testConcurrency() throws InterruptedException {
+        System.out.println("=== Testing Thread Safety ===");
+        Logger logger = Logger.getInstance();
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new ConsoleAppender()));
+        
+        final int NUM_THREADS = 10;
+        final int MESSAGES_PER_THREAD = 5;
+        
+        // Create ExecutorService with fixed thread pool
+        ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
+        List<Future<?>> futures = new ArrayList<>();
+        
+        // Submit tasks to executor
+        for (int i = 0; i < NUM_THREADS; i++) {
+            final int threadId = i;
+            Future<?> future = executor.submit(() -> {
+                for (int j = 0; j < MESSAGES_PER_THREAD; j++) {
+                    logger.info("Thread-" + threadId + " Message-" + j);
+                }
+            });
+            futures.add(future);
+        }
+        
+        // Wait for all tasks to complete
+        for (Future<?> future : futures) {
+            try {
+                future.get(); // Wait for completion
+            } catch (ExecutionException e) {
+                System.err.println("Task execution failed: " + e.getMessage());
+            }
+        }
+        
+        // Shutdown executor properly
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
+        System.out.println("Concurrent logging test completed");
+    }
+    
+    public static void testDifferentExecutorTypes() throws InterruptedException {
+        System.out.println("=== Testing Different ExecutorService Types ===");
+        Logger logger = Logger.getInstance();
+        logger.setConfig(new LoggerConfig(LogLevel.INFO, new ConsoleAppender()));
+        
+        // Test Fixed Thread Pool
+        System.out.println("Fixed Thread Pool:");
+        ExecutorService fixedExecutor = Executors.newFixedThreadPool(3);
+        for (int i = 0; i < 5; i++) {
+            final int taskId = i;
+            fixedExecutor.submit(() -> logger.info("FixedPool - Task " + taskId));
+        }
+        fixedExecutor.shutdown();
+        fixedExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        
+        // Test Cached Thread Pool
+        System.out.println("\nCached Thread Pool:");
+        ExecutorService cachedExecutor = Executors.newCachedThreadPool();
+        for (int i = 0; i < 5; i++) {
+            final int taskId = i;
+            cachedExecutor.submit(() -> logger.info("CachedPool - Task " + taskId));
+        }
+        cachedExecutor.shutdown();
+        cachedExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        
+        // Test Single Thread Executor
+        System.out.println("\nSingle Thread Executor:");
+        ExecutorService singleExecutor = Executors.newSingleThreadExecutor();
+        for (int i = 0; i < 3; i++) {
+            final int taskId = i;
+            singleExecutor.submit(() -> logger.info("SingleThread - Task " + taskId));
+        }
+        singleExecutor.shutdown();
+        singleExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        
+        System.out.println("Different executor types test completed");
+    }
+    
+    public static void main(String[] args) throws InterruptedException {
+        testLogLevels();
+        testAppenders();
+        testConcurrency();
+        testDifferentExecutorTypes();
+    }
+}
