@@ -985,3 +985,425 @@ public class RegistrationFacade {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+package org.example;
+
+import org.example.models.*;
+import org.example.service.*;
+import org.example.service.impl.*;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.printf("Hello and welcome!");
+
+        for (int i = 1; i <= 5; i++) {
+            System.out.println("i = " + i);
+        }
+
+        // Course Registration System Demo with Facade Pattern
+        IStudentService studentService = new StudentService();
+        ICourseService courseService = new CourseService();
+        
+        // Facade that orchestrates both services
+        RegistrationFacade registrationFacade = new RegistrationFacade(studentService, courseService);
+
+        // Create some courses
+        Course math = new Course("C001", "Mathematics", "Dr. Smith", 2);
+        Course physics = new Course("C002", "Physics", "Dr. Johnson", 1);
+        
+        courseService.addCourse(math);
+        courseService.addCourse(physics);
+
+        // Create students
+        Student alice = new Student("S001", "Alice", "alice@email.com");
+        Student bob = new Student("S002", "Bob", "bob@email.com");
+        
+        studentService.registerUser(alice);
+        studentService.registerUser(bob);
+
+        // Register for courses using facade
+        System.out.println("Registration results:");
+        System.out.println("Alice + Math: " + registrationFacade.registerStudentForCourse("S001", "C001"));
+        System.out.println("Bob + Math: " + registrationFacade.registerStudentForCourse("S002", "C001"));
+        System.out.println("Alice + Physics: " + registrationFacade.registerStudentForCourse("S001", "C002"));
+
+        // View timetable using facade
+        System.out.println("\nAlice's courses: " + registrationFacade.getStudentCourses("S001"));
+    }
+}
+
+package org.example.models;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Course {
+    private final String courseId;
+    private final String name;
+    private final String proffessor;
+    private final int capacity;
+    List<Integer> studentList;
+    private final ReentrantLock lock = new ReentrantLock(); // For thread safety
+
+    public Course(String courseId, String name, String proffessor, int capacity) {
+        this.courseId = courseId;
+        this.name = name;
+        this.proffessor = proffessor;
+        this.capacity = capacity;
+        studentList = new ArrayList<>(capacity);
+    }
+
+    public String getCourseId() {
+        return courseId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getProffessor() {
+        return proffessor;
+    }
+
+    public int getCapacity() {
+        return capacity;
+    }
+
+    public List<Integer> getStudentList() {
+        return studentList;
+    }
+
+    public void setStudentList(List<Integer> studentList) {
+        this.studentList = studentList;
+    }
+    
+    public boolean isAvailable() {
+        return studentList.size() < capacity;
+    }
+    
+    public ReentrantLock getLock() {
+        return lock;
+    }
+}
+
+package org.example.models;
+
+public class Registration {
+    private String registrationId;
+    private String studentId;
+    private String courseId;
+
+    public Registration(String registrationId, String studentId, String courseId) {
+        this.registrationId = registrationId;
+        this.studentId = studentId;
+        this.courseId = courseId;
+    }
+
+    public String getRegistrationId() {
+        return registrationId;
+    }
+
+    public void setRegistrationId(String registrationId) {
+        this.registrationId = registrationId;
+    }
+
+    public String getStudentId() {
+        return studentId;
+    }
+
+    public void setStudentId(String studentId) {
+        this.studentId = studentId;
+    }
+
+    public String getCourseId() {
+        return courseId;
+    }
+
+    public void setCourseId(String courseId) {
+        this.courseId = courseId;
+    }
+}
+
+package org.example.models;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Student {
+    private final String studentId;
+    private final String name;
+    private final String email;
+    List<Integer> courses;
+
+    public Student(String studentId, String name, String email) {
+        this.studentId = studentId;
+        this.name = name;
+        this.email = email;
+        courses = new ArrayList<>();
+    }
+
+    public String getStudentId() {
+        return studentId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public List<Integer> getCourses() {
+        return courses;
+    }
+
+    public void setCourses(List<Integer> courses) {
+        this.courses = courses;
+    }
+}
+
+// ============= INTERFACES FOR LOOSE COUPLING =============
+
+package org.example.service;
+
+import org.example.models.Student;
+import java.util.List;
+
+public interface IStudentService {
+    void registerUser(Student student);
+    Student getStudentById(String studentId);
+    List<Student> getAllStudents();
+    void addCourseToStudent(String studentId, String courseId);
+    void removeCourseFromStudent(String studentId, String courseId);
+}
+
+package org.example.service;
+
+import org.example.models.Course;
+import java.util.List;
+
+public interface ICourseService {
+    void addCourse(Course course);
+    Course getCourseById(String courseId);
+    List<Course> getAllCourses();
+    List<Course> getAvailableCourses();
+    void addStudentToCourse(String courseId, String studentId);
+    void removeStudentFromCourse(String courseId, String studentId);
+}
+
+// ============= SERVICE IMPLEMENTATIONS =============
+
+package org.example.service.impl;
+
+import org.example.models.Student;
+import org.example.service.IStudentService;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+public class StudentService implements IStudentService {
+    HashMap<String, Student> students = new HashMap<>();
+
+    @Override
+    public void registerUser(Student student) {
+        students.putIfAbsent(student.getStudentId(), student);
+    }
+
+    @Override
+    public Student getStudentById(String studentId) {
+        return students.get(studentId);
+    }
+
+    @Override
+    public List<Student> getAllStudents() {
+        return new ArrayList<>(students.values());
+    }
+
+    @Override
+    public void addCourseToStudent(String studentId, String courseId) {
+        Student student = students.get(studentId);
+        if (student != null) {
+            student.getCourses().add(Integer.parseInt(courseId.substring(1))); // Remove 'C' prefix
+        }
+    }
+
+    @Override
+    public void removeCourseFromStudent(String studentId, String courseId) {
+        Student student = students.get(studentId);
+        if (student != null) {
+            student.getCourses().remove(Integer.valueOf(Integer.parseInt(courseId.substring(1))));
+        }
+    }
+}
+
+package org.example.service.impl;
+
+import org.example.models.Course;
+import org.example.service.ICourseService;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+public class CourseService implements ICourseService {
+    HashMap<String, Course> courses = new HashMap<>();
+
+    @Override
+    public void addCourse(Course course) {
+        courses.putIfAbsent(course.getCourseId(), course);
+    }
+
+    @Override
+    public Course getCourseById(String courseId) {
+        return courses.get(courseId);
+    }
+
+    @Override
+    public List<Course> getAllCourses() {
+        return new ArrayList<>(courses.values());
+    }
+
+    @Override
+    public List<Course> getAvailableCourses() {
+        List<Course> availableCourses = new ArrayList<>();
+        for (Course course : courses.values()) {
+            if (course.isAvailable()) {
+                availableCourses.add(course);
+            }
+        }
+        return availableCourses;
+    }
+
+    @Override
+    public void addStudentToCourse(String courseId, String studentId) {
+        Course course = courses.get(courseId);
+        if (course != null && course.isAvailable()) {
+            course.getStudentList().add(Integer.parseInt(studentId.substring(1))); // Remove 'S' prefix
+        }
+    }
+
+    @Override
+    public void removeStudentFromCourse(String courseId, String studentId) {
+        Course course = courses.get(courseId);
+        if (course != null) {
+            course.getStudentList().remove(Integer.valueOf(Integer.parseInt(studentId.substring(1))));
+        }
+    }
+}
+
+// ============= FACADE PATTERN =============
+
+package org.example.service;
+
+import org.example.models.Course;
+import org.example.models.Registration;
+import org.example.models.Student;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
+
+public class RegistrationFacade {
+    HashMap<String, Registration> registrations = new HashMap<>();
+    private IStudentService studentService; // LOOSE COUPLING - depends on interface
+    private ICourseService courseService;   // LOOSE COUPLING - depends on interface
+
+    public RegistrationFacade(IStudentService studentService, ICourseService courseService) {
+        this.studentService = studentService;
+        this.courseService = courseService;
+    }
+
+    // Complex operation that coordinates both services
+    public boolean registerStudentForCourse(String studentId, String courseId) {
+        Student student = studentService.getStudentById(studentId);
+        Course course = courseService.getCourseById(courseId);
+
+        if (student == null || course == null) {
+            return false;
+        }
+
+        // CRITICAL SECTION - Prevent race condition using ReentrantLock
+        course.getLock().lock();
+        try {
+            if (!course.isAvailable()) {
+                return false;
+            }
+
+            // Use individual services for their specific responsibilities
+            studentService.addCourseToStudent(studentId, courseId);
+            courseService.addStudentToCourse(courseId, studentId);
+
+            // Create registration record
+            String registrationId = UUID.randomUUID().toString();
+            Registration registration = new Registration(registrationId, studentId, courseId);
+            registrations.put(registrationId, registration);
+
+            return true;
+        } finally {
+            course.getLock().unlock();
+        }
+    }
+
+    public boolean dropStudentFromCourse(String studentId, String courseId) {
+        Student student = studentService.getStudentById(studentId);
+        Course course = courseService.getCourseById(courseId);
+
+        if (student == null || course == null) {
+            return false;
+        }
+
+        // CRITICAL SECTION - Prevent race condition using ReentrantLock
+        course.getLock().lock();
+        try {
+            // Use individual services for their specific responsibilities
+            studentService.removeCourseFromStudent(studentId, courseId);
+            courseService.removeStudentFromCourse(courseId, studentId);
+
+            return true;
+        } finally {
+            course.getLock().unlock();
+        }
+    }
+
+    // Complex query that involves both services
+    public List<String> getStudentCourses(String studentId) {
+        Student student = studentService.getStudentById(studentId);
+        if (student == null) {
+            return new ArrayList<>();
+        }
+
+        List<String> courseNames = new ArrayList<>();
+        List<Integer> courseIds = student.getCourses();
+        
+        for (Integer courseId : courseIds) {
+            Course course = courseService.getCourseById("C" + String.format("%03d", courseId));
+            if (course != null) {
+                courseNames.add(course.getName());
+            }
+        }
+        return courseNames;
+    }
+}
+
+
+Synchonize will be slower than reentrant lock.
+
+
+
+
+
+
