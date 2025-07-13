@@ -1,0 +1,911 @@
+// ============= MODELS =============
+
+package org.example.models;
+
+import java.time.LocalDateTime;
+
+public class User {
+    private final String userId;
+    private final String name;
+    private final String email;
+    private String password;
+    private String address;
+    private final LocalDateTime createdAt;
+
+    public User(String userId, String name, String email, String password, String address) {
+        this.userId = userId;
+        this.name = name;
+        this.email = email;
+        this.password = password;
+        this.address = address;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    // Getters and Setters
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+}
+
+package org.example.models;
+
+import java.math.BigDecimal;
+
+public class Product {
+    private final String productId;
+    private String name;
+    private String description;
+    private BigDecimal price;
+    private int stockQuantity;
+    private String category;
+
+    public Product(String productId, String name, String description, BigDecimal price, int stockQuantity, String category) {
+        this.productId = productId;
+        this.name = name;
+        this.description = description;
+        this.price = price;
+        this.stockQuantity = stockQuantity;
+        this.category = category;
+    }
+
+    public boolean isInStock(int quantity) {
+        return stockQuantity >= quantity;
+    }
+
+    public void reduceStock(int quantity) {
+        if (isInStock(quantity)) {
+            stockQuantity -= quantity;
+        }
+    }
+
+    public void increaseStock(int quantity) {
+        stockQuantity += quantity;
+    }
+
+    // Getters and Setters
+    public String getProductId() { return productId; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+    public int getStockQuantity() { return stockQuantity; }
+    public void setStockQuantity(int stockQuantity) { this.stockQuantity = stockQuantity; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+}
+
+package org.example.models;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Cart {
+    private final String cartId;
+    private final String userId;
+    private List<String> cartItemIds; // ID-based relationship
+
+    public Cart(String cartId, String userId) {
+        this.cartId = cartId;
+        this.userId = userId;
+        this.cartItemIds = new ArrayList<>();
+    }
+
+    // Getters and Setters
+    public String getCartId() { return cartId; }
+    public String getUserId() { return userId; }
+    public List<String> getCartItemIds() { return cartItemIds; }
+    public void setCartItemIds(List<String> cartItemIds) { this.cartItemIds = cartItemIds; }
+}
+
+package org.example.models;
+
+import java.math.BigDecimal;
+
+public class CartItem {
+    private final String cartItemId;
+    private final String cartId;
+    private final String productId;
+    private int quantity;
+    private BigDecimal priceAtTime; // Price when added to cart
+
+    public CartItem(String cartItemId, String cartId, String productId, int quantity, BigDecimal priceAtTime) {
+        this.cartItemId = cartItemId;
+        this.cartId = cartId;
+        this.productId = productId;
+        this.quantity = quantity;
+        this.priceAtTime = priceAtTime;
+    }
+
+    public BigDecimal getTotalPrice() {
+        return priceAtTime.multiply(BigDecimal.valueOf(quantity));
+    }
+
+    // Getters and Setters
+    public String getCartItemId() { return cartItemId; }
+    public String getCartId() { return cartId; }
+    public String getProductId() { return productId; }
+    public int getQuantity() { return quantity; }
+    public void setQuantity(int quantity) { this.quantity = quantity; }
+    public BigDecimal getPriceAtTime() { return priceAtTime; }
+    public void setPriceAtTime(BigDecimal priceAtTime) { this.priceAtTime = priceAtTime; }
+}
+
+package org.example.models;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Order {
+    private final String orderId;
+    private final String userId;
+    private final LocalDateTime orderDate;
+    private OrderStatus status;
+    private BigDecimal totalAmount;
+    private List<String> orderItemIds; // ID-based relationship
+
+    public Order(String orderId, String userId, BigDecimal totalAmount) {
+        this.orderId = orderId;
+        this.userId = userId;
+        this.orderDate = LocalDateTime.now();
+        this.status = OrderStatus.PLACED;
+        this.totalAmount = totalAmount;
+        this.orderItemIds = new ArrayList<>();
+    }
+
+    // Getters and Setters
+    public String getOrderId() { return orderId; }
+    public String getUserId() { return userId; }
+    public LocalDateTime getOrderDate() { return orderDate; }
+    public OrderStatus getStatus() { return status; }
+    public void setStatus(OrderStatus status) { this.status = status; }
+    public BigDecimal getTotalAmount() { return totalAmount; }
+    public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    public List<String> getOrderItemIds() { return orderItemIds; }
+    public void setOrderItemIds(List<String> orderItemIds) { this.orderItemIds = orderItemIds; }
+}
+
+package org.example.models;
+
+public enum OrderStatus {
+    PLACED,
+    CONFIRMED,
+    SHIPPED,
+    DELIVERED,
+    CANCELLED
+}
+
+package org.example.models;
+
+import java.math.BigDecimal;
+
+public class OrderItem {
+    private final String orderItemId;
+    private final String orderId;
+    private final String productId;
+    private final int quantity;
+    private final BigDecimal priceAtOrder; // Price when order was placed
+
+    public OrderItem(String orderItemId, String orderId, String productId, int quantity, BigDecimal priceAtOrder) {
+        this.orderItemId = orderItemId;
+        this.orderId = orderId;
+        this.productId = productId;
+        this.quantity = quantity;
+        this.priceAtOrder = priceAtOrder;
+    }
+
+    public BigDecimal getTotalPrice() {
+        return priceAtOrder.multiply(BigDecimal.valueOf(quantity));
+    }
+
+    // Getters
+    public String getOrderItemId() { return orderItemId; }
+    public String getOrderId() { return orderId; }
+    public String getProductId() { return productId; }
+    public int getQuantity() { return quantity; }
+    public BigDecimal getPriceAtOrder() { return priceAtOrder; }
+}
+
+package org.example.models;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+public class Payment {
+    private final String paymentId;
+    private final String orderId;
+    private final PaymentMethod paymentMethod;
+    private final BigDecimal amount;
+    private PaymentStatus status;
+    private final LocalDateTime paymentDate;
+
+    public Payment(String paymentId, String orderId, PaymentMethod paymentMethod, BigDecimal amount) {
+        this.paymentId = paymentId;
+        this.orderId = orderId;
+        this.paymentMethod = paymentMethod;
+        this.amount = amount;
+        this.status = PaymentStatus.PENDING;
+        this.paymentDate = LocalDateTime.now();
+    }
+
+    // Getters and Setters
+    public String getPaymentId() { return paymentId; }
+    public String getOrderId() { return orderId; }
+    public PaymentMethod getPaymentMethod() { return paymentMethod; }
+    public BigDecimal getAmount() { return amount; }
+    public PaymentStatus getStatus() { return status; }
+    public void setStatus(PaymentStatus status) { this.status = status; }
+    public LocalDateTime getPaymentDate() { return paymentDate; }
+}
+
+package org.example.models;
+
+public enum PaymentMethod {
+    CREDIT_CARD,
+    DEBIT_CARD,
+    UPI,
+    NET_BANKING,
+    COD
+}
+
+package org.example.models;
+
+public enum PaymentStatus {
+    PENDING,
+    SUCCESS,
+    FAILED,
+    REFUNDED
+}
+
+// ============= SERVICE INTERFACES =============
+
+package org.example.service;
+
+import org.example.models.User;
+
+public interface IUserService {
+    boolean registerUser(User user);
+    User loginUser(String email, String password);
+    User getUserById(String userId);
+    boolean updateUserProfile(String userId, String address);
+    boolean changePassword(String userId, String oldPassword, String newPassword);
+}
+
+package org.example.service;
+
+import org.example.models.Product;
+import java.math.BigDecimal;
+import java.util.List;
+
+public interface IProductService {
+    boolean addProduct(Product product);
+    Product getProductById(String productId);
+    List<Product> getAllProducts();
+    List<Product> getProductsByCategory(String category);
+    List<Product> searchProducts(String keyword);
+    boolean updateProductPrice(String productId, BigDecimal newPrice);
+    boolean updateStock(String productId, int quantity);
+}
+
+package org.example.service;
+
+import org.example.models.Cart;
+import org.example.models.CartItem;
+import java.util.List;
+
+public interface ICartService {
+    Cart createCart(String userId);
+    Cart getCartByUserId(String userId);
+    boolean addItemToCart(String cartId, String productId, int quantity);
+    boolean updateCartItemQuantity(String cartItemId, int quantity);
+    boolean removeItemFromCart(String cartItemId);
+    List<CartItem> getCartItems(String cartId);
+    void clearCart(String cartId);
+}
+
+package org.example.service;
+
+import org.example.models.Order;
+import org.example.models.OrderItem;
+import org.example.models.OrderStatus;
+import java.util.List;
+
+public interface IOrderService {
+    Order createOrderFromCart(String userId, String cartId);
+    Order getOrderById(String orderId);
+    List<Order> getOrdersByUserId(String userId);
+    List<OrderItem> getOrderItems(String orderId);
+    boolean updateOrderStatus(String orderId, OrderStatus status);
+    boolean cancelOrder(String orderId);
+}
+
+package org.example.service;
+
+import org.example.models.Payment;
+import org.example.models.PaymentMethod;
+import org.example.models.PaymentStatus;
+import java.math.BigDecimal;
+
+public interface IPaymentService {
+    Payment processPayment(String orderId, PaymentMethod method, BigDecimal amount);
+    Payment getPaymentByOrderId(String orderId);
+    boolean updatePaymentStatus(String paymentId, PaymentStatus status);
+    boolean refundPayment(String paymentId);
+}
+
+// ============= SERVICE IMPLEMENTATIONS =============
+
+package org.example.service.impl;
+
+import org.example.models.User;
+import org.example.service.IUserService;
+import java.util.HashMap;
+import java.util.Map;
+
+public class UserService implements IUserService {
+    private Map<String, User> users = new HashMap<>();
+    private Map<String, String> emailToUserId = new HashMap<>();
+
+    @Override
+    public boolean registerUser(User user) {
+        if (emailToUserId.containsKey(user.getEmail())) {
+            return false; // Email already exists
+        }
+        users.put(user.getUserId(), user);
+        emailToUserId.put(user.getEmail(), user.getUserId());
+        return true;
+    }
+
+    @Override
+    public User loginUser(String email, String password) {
+        String userId = emailToUserId.get(email);
+        if (userId != null) {
+            User user = users.get(userId);
+            if (user != null && user.getPassword().equals(password)) {
+                return user;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public User getUserById(String userId) {
+        return users.get(userId);
+    }
+
+    @Override
+    public boolean updateUserProfile(String userId, String address) {
+        User user = users.get(userId);
+        if (user != null) {
+            user.setAddress(address);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean changePassword(String userId, String oldPassword, String newPassword) {
+        User user = users.get(userId);
+        if (user != null && user.getPassword().equals(oldPassword)) {
+            user.setPassword(newPassword);
+            return true;
+        }
+        return false;
+    }
+}
+
+package org.example.service.impl;
+
+import org.example.models.Product;
+import org.example.service.IProductService;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class ProductService implements IProductService {
+    private Map<String, Product> products = new HashMap<>();
+
+    @Override
+    public boolean addProduct(Product product) {
+        if (products.containsKey(product.getProductId())) {
+            return false;
+        }
+        products.put(product.getProductId(), product);
+        return true;
+    }
+
+    @Override
+    public Product getProductById(String productId) {
+        return products.get(productId);
+    }
+
+    @Override
+    public List<Product> getAllProducts() {
+        return new ArrayList<>(products.values());
+    }
+
+    @Override
+    public List<Product> getProductsByCategory(String category) {
+        return products.values().stream()
+                .filter(product -> product.getCategory().equalsIgnoreCase(category))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Product> searchProducts(String keyword) {
+        return products.values().stream()
+                .filter(product -> product.getName().toLowerCase().contains(keyword.toLowerCase()) ||
+                                 product.getDescription().toLowerCase().contains(keyword.toLowerCase()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean updateProductPrice(String productId, BigDecimal newPrice) {
+        Product product = products.get(productId);
+        if (product != null) {
+            product.setPrice(newPrice);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean updateStock(String productId, int quantity) {
+        Product product = products.get(productId);
+        if (product != null) {
+            product.setStockQuantity(quantity);
+            return true;
+        }
+        return false;
+    }
+}
+
+package org.example.service.impl;
+
+import org.example.models.Cart;
+import org.example.models.CartItem;
+import org.example.models.Product;
+import org.example.service.ICartService;
+import org.example.service.IProductService;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class CartService implements ICartService {
+    private Map<String, Cart> carts = new HashMap<>();
+    private Map<String, CartItem> cartItems = new HashMap<>();
+    private Map<String, String> userToCartMapping = new HashMap<>();
+    private IProductService productService;
+
+    public CartService(IProductService productService) {
+        this.productService = productService;
+    }
+
+    @Override
+    public Cart createCart(String userId) {
+        String cartId = "CART_" + UUID.randomUUID().toString();
+        Cart cart = new Cart(cartId, userId);
+        carts.put(cartId, cart);
+        userToCartMapping.put(userId, cartId);
+        return cart;
+    }
+
+    @Override
+    public Cart getCartByUserId(String userId) {
+        String cartId = userToCartMapping.get(userId);
+        return cartId != null ? carts.get(cartId) : null;
+    }
+
+    @Override
+    public boolean addItemToCart(String cartId, String productId, int quantity) {
+        Cart cart = carts.get(cartId);
+        Product product = productService.getProductById(productId);
+        
+        if (cart == null || product == null || !product.isInStock(quantity)) {
+            return false;
+        }
+
+        // Check if item already exists in cart
+        for (String itemId : cart.getCartItemIds()) {
+            CartItem existingItem = cartItems.get(itemId);
+            if (existingItem.getProductId().equals(productId)) {
+                existingItem.setQuantity(existingItem.getQuantity() + quantity);
+                return true;
+            }
+        }
+
+        // Add new item
+        String cartItemId = "ITEM_" + UUID.randomUUID().toString();
+        CartItem cartItem = new CartItem(cartItemId, cartId, productId, quantity, product.getPrice());
+        cartItems.put(cartItemId, cartItem);
+        cart.getCartItemIds().add(cartItemId);
+        return true;
+    }
+
+    @Override
+    public boolean updateCartItemQuantity(String cartItemId, int quantity) {
+        CartItem cartItem = cartItems.get(cartItemId);
+        if (cartItem != null && quantity > 0) {
+            cartItem.setQuantity(quantity);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean removeItemFromCart(String cartItemId) {
+        CartItem cartItem = cartItems.get(cartItemId);
+        if (cartItem != null) {
+            Cart cart = carts.get(cartItem.getCartId());
+            if (cart != null) {
+                cart.getCartItemIds().remove(cartItemId);
+                cartItems.remove(cartItemId);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public List<CartItem> getCartItems(String cartId) {
+        Cart cart = carts.get(cartId);
+        if (cart != null) {
+            return cart.getCartItemIds().stream()
+                    .map(cartItems::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
+    public void clearCart(String cartId) {
+        Cart cart = carts.get(cartId);
+        if (cart != null) {
+            for (String itemId : cart.getCartItemIds()) {
+                cartItems.remove(itemId);
+            }
+            cart.getCartItemIds().clear();
+        }
+    }
+}
+
+package org.example.service.impl;
+
+import org.example.models.*;
+import org.example.service.*;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class OrderService implements IOrderService {
+    private Map<String, Order> orders = new HashMap<>();
+    private Map<String, OrderItem> orderItems = new HashMap<>();
+    private ICartService cartService;
+    private IProductService productService;
+
+    public OrderService(ICartService cartService, IProductService productService) {
+        this.cartService = cartService;
+        this.productService = productService;
+    }
+
+    @Override
+    public Order createOrderFromCart(String userId, String cartId) {
+        List<CartItem> cartItems = cartService.getCartItems(cartId);
+        if (cartItems.isEmpty()) {
+            return null;
+        }
+
+        // Calculate total and validate stock
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (CartItem cartItem : cartItems) {
+            Product product = productService.getProductById(cartItem.getProductId());
+            if (product == null || !product.isInStock(cartItem.getQuantity())) {
+                return null; // Stock not available
+            }
+            totalAmount = totalAmount.add(cartItem.getTotalPrice());
+        }
+
+        // Create order
+        String orderId = "ORD_" + UUID.randomUUID().toString();
+        Order order = new Order(orderId, userId, totalAmount);
+
+        // Create order items and reduce stock
+        for (CartItem cartItem : cartItems) {
+            String orderItemId = "ITEM_" + UUID.randomUUID().toString();
+            OrderItem orderItem = new OrderItem(orderItemId, orderId, cartItem.getProductId(), 
+                                               cartItem.getQuantity(), cartItem.getPriceAtTime());
+            orderItems.put(orderItemId, orderItem);
+            order.getOrderItemIds().add(orderItemId);
+
+            // Reduce stock
+            Product product = productService.getProductById(cartItem.getProductId());
+            product.reduceStock(cartItem.getQuantity());
+        }
+
+        orders.put(orderId, order);
+        cartService.clearCart(cartId);
+        return order;
+    }
+
+    @Override
+    public Order getOrderById(String orderId) {
+        return orders.get(orderId);
+    }
+
+    @Override
+    public List<Order> getOrdersByUserId(String userId) {
+        return orders.values().stream()
+                .filter(order -> order.getUserId().equals(userId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OrderItem> getOrderItems(String orderId) {
+        Order order = orders.get(orderId);
+        if (order != null) {
+            return order.getOrderItemIds().stream()
+                    .map(orderItems::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
+    public boolean updateOrderStatus(String orderId, OrderStatus status) {
+        Order order = orders.get(orderId);
+        if (order != null) {
+            order.setStatus(status);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean cancelOrder(String orderId) {
+        Order order = orders.get(orderId);
+        if (order != null && order.getStatus() == OrderStatus.PLACED) {
+            order.setStatus(OrderStatus.CANCELLED);
+            
+            // Restore stock
+            for (OrderItem orderItem : getOrderItems(orderId)) {
+                Product product = productService.getProductById(orderItem.getProductId());
+                if (product != null) {
+                    product.increaseStock(orderItem.getQuantity());
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+}
+
+package org.example.service.impl;
+
+import org.example.models.*;
+import org.example.service.IPaymentService;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class PaymentService implements IPaymentService {
+    private Map<String, Payment> payments = new HashMap<>();
+    private Map<String, String> orderToPaymentMapping = new HashMap<>();
+
+    @Override
+    public Payment processPayment(String orderId, PaymentMethod method, BigDecimal amount) {
+        String paymentId = "PAY_" + UUID.randomUUID().toString();
+        Payment payment = new Payment(paymentId, orderId, method, amount);
+        
+        // Simulate payment processing
+        boolean success = simulatePaymentProcessing(method);
+        payment.setStatus(success ? PaymentStatus.SUCCESS : PaymentStatus.FAILED);
+        
+        payments.put(paymentId, payment);
+        orderToPaymentMapping.put(orderId, paymentId);
+        return payment;
+    }
+
+    @Override
+    public Payment getPaymentByOrderId(String orderId) {
+        String paymentId = orderToPaymentMapping.get(orderId);
+        return paymentId != null ? payments.get(paymentId) : null;
+    }
+
+    @Override
+    public boolean updatePaymentStatus(String paymentId, PaymentStatus status) {
+        Payment payment = payments.get(paymentId);
+        if (payment != null) {
+            payment.setStatus(status);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean refundPayment(String paymentId) {
+        Payment payment = payments.get(paymentId);
+        if (payment != null && payment.getStatus() == PaymentStatus.SUCCESS) {
+            payment.setStatus(PaymentStatus.REFUNDED);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean simulatePaymentProcessing(PaymentMethod method) {
+        // Simulate payment success/failure
+        return Math.random() > 0.1; // 90% success rate
+    }
+}
+
+// ============= FACADE PATTERN =============
+
+package org.example.facade;
+
+import org.example.models.*;
+import org.example.service.*;
+import java.math.BigDecimal;
+import java.util.List;
+
+public class EcommerceFacade {
+    private IUserService userService;
+    private IProductService productService;
+    private ICartService cartService;
+    private IOrderService orderService;
+    private IPaymentService paymentService;
+
+    public EcommerceFacade(IUserService userService, IProductService productService, 
+                          ICartService cartService, IOrderService orderService, 
+                          IPaymentService paymentService) {
+        this.userService = userService;
+        this.productService = productService;
+        this.cartService = cartService;
+        this.orderService = orderService;
+        this.paymentService = paymentService;
+    }
+
+    // Complex operation: Complete purchase flow
+    public boolean completePurchase(String userId, PaymentMethod paymentMethod) {
+        Cart cart = cartService.getCartByUserId(userId);
+        if (cart == null) return false;
+
+        // Create order from cart
+        Order order = orderService.createOrderFromCart(userId, cart.getCartId());
+        if (order == null) return false;
+
+        // Process payment
+        Payment payment = paymentService.processPayment(order.getOrderId(), paymentMethod, order.getTotalAmount());
+        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+            orderService.cancelOrder(order.getOrderId());
+            return false;
+        }
+
+        // Update order status
+        orderService.updateOrderStatus(order.getOrderId(), OrderStatus.CONFIRMED);
+        return true;
+    }
+
+    // Complex operation: User registration with cart creation
+    public boolean registerUserWithCart(User user) {
+        if (userService.registerUser(user)) {
+            cartService.createCart(user.getUserId());
+            return true;
+        }
+        return false;
+    }
+
+    // Complex operation: Add product to user's cart
+    public boolean addProductToUserCart(String userId, String productId, int quantity) {
+        Cart cart = cartService.getCartByUserId(userId);
+        if (cart == null) {
+            cart = cartService.createCart(userId);
+        }
+        return cartService.addItemToCart(cart.getCartId(), productId, quantity);
+    }
+
+    // Delegate simple operations to appropriate services
+    public User loginUser(String email, String password) {
+        return userService.loginUser(email, password);
+    }
+
+    public List<Product> searchProducts(String keyword) {
+        return productService.searchProducts(keyword);
+    }
+
+    public List<Order> getUserOrders(String userId) {
+        return orderService.getOrdersByUserId(userId);
+    }
+}
+
+// ============= MAIN APPLICATION =============
+
+package org.example;
+
+import org.example.facade.EcommerceFacade;
+import org.example.models.*;
+import org.example.service.*;
+import org.example.service.impl.*;
+import java.math.BigDecimal;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        // Initialize services with dependency injection
+        IUserService userService = new UserService();
+        IProductService productService = new ProductService();
+        ICartService cartService = new CartService(productService);
+        IOrderService orderService = new OrderService(cartService, productService);
+        IPaymentService paymentService = new PaymentService();
+
+        // Initialize facade
+        EcommerceFacade ecommerceFacade = new EcommerceFacade(userService, productService, 
+                                                            cartService, orderService, paymentService);
+
+        // Demo the system
+        demonstrateEcommerce(ecommerceFacade, userService, productService);
+    }
+
+    private static void demonstrateEcommerce(EcommerceFacade facade, IUserService userService, IProductService productService) {
+        System.out.println("=== E-commerce System Demo ===");
+
+        // Add products
+        Product laptop = new Product("P001", "Gaming Laptop", "High-performance gaming laptop", 
+                                   new BigDecimal("80000"), 10, "Electronics");
+        Product mouse = new Product("P002", "Wireless Mouse", "Ergonomic wireless mouse", 
+                                  new BigDecimal("2000"), 50, "Electronics");
+        
+        productService.addProduct(laptop);
+        productService.addProduct(mouse);
+        System.out.println("Products added to catalog");
+
+        // Register user
+        User user = new User("U001", "John Doe", "john@example.com", "password123", "123 Main St");
+        boolean registered = facade.registerUserWithCart(user);
+        System.out.println("User registration: " + (registered ? "Success" : "Failed"));
+
+        // User login
+        User loggedInUser = facade.loginUser("john@example.com", "password123");
+        System.out.println("Login: " + (loggedInUser != null ? "Success" : "Failed"));
+
+        if (loggedInUser != null) {
+            // Search and add products to cart
+            List<Product> searchResults = facade.searchProducts("laptop");
+            System.out.println("Found " + searchResults.size() + " products matching 'laptop'");
+
+            // Add products to cart
+            boolean added1 = facade.addProductToUserCart("U001", "P001", 1);
+            boolean added2 = facade.addProductToUserCart("U001", "P002", 2);
+            System.out.println("Added laptop to cart: " + added1);
+            System.out.println("Added mouse to cart: " + added2);
+
+            // Complete purchase
+            boolean purchaseComplete = facade.completePurchase("U001", PaymentMethod.CREDIT_CARD);
+            System.out.println("Purchase completed: " + purchaseComplete);
+
+            // View orders
+            List<Order> orders = facade.getUserOrders("U001");
+            System.out.println("User has " + orders.size() + " orders");
+            
+            if (!orders.isEmpty()) {
+                Order order = orders.get(0);
+                System.out.println("Latest order: " + order.getOrderId() + 
+                                 " - Status: " + order.getStatus() + 
+                                 " - Amount: ₹" + order.getTotalAmount());
+            }
+        }
+    }
+}
+
+
+
+
+Used id based relationships along with facade pattern for interservices methods. Can implement locking later on in this scenario as well
