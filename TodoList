@@ -1,0 +1,375 @@
+Develop a TODO task tracking application which allows its users to maintain TODO lists. TODO tasks in the list can have a deadline and tags associated with them for easier grouping and management. You can demonstrate the working of the application using a driver program. There is no requirement to use a database for persistence (instead, use memory to store data) or write a web service. Features : Users should be able to update the TODO list at any point in time - add, modify and remove tasks A task can be marked as completed and once it is completed, it is automatically removed from the TODO list. Tasks can also be added to appear in the TODO list at a future date. Users should be able to see an activity log which describes additions, modifications and removals of tasks from the TODO list during a particular time period. Users should also be able to see statistics around how many tasks were added, completed and spilled over the deadline during a particular period of time. Implementation requirements
+
+
+
+package model;
+
+import java.time.LocalDate;
+import java.util.Set;
+
+public class Task {
+    private final int id;
+    private String description;
+    private LocalDate dueDate;
+    private Set<String> tags;
+    private boolean isCompleted;
+    private LocalDate appearOnDate;
+
+    public Task(int id, String description, LocalDate dueDate, Set<String> tags, LocalDate appearOnDate) {
+        this.id = id;
+        this.description = description;
+        this.dueDate = dueDate;
+        this.tags = tags;
+        this.appearOnDate = appearOnDate;
+        this.isCompleted = false;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public LocalDate getDueDate() {
+        return dueDate;
+    }
+
+    public Set<String> getTags() {
+        return tags;
+    }
+
+    public boolean isCompleted() {
+        return isCompleted;
+    }
+
+    public LocalDate getAppearOnDate() {
+        return appearOnDate;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setDueDate(LocalDate dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public void setTags(Set<String> tags) {
+        this.tags = tags;
+    }
+
+    public void setAppearOnDate(LocalDate appearOnDate) {
+        this.appearOnDate = appearOnDate;
+    }
+
+    public void markCompleted() {
+        this.isCompleted = true;
+    }
+}
+
+package model;
+
+import java.time.LocalDateTime;
+
+public class Activity {
+    public enum ActionType { ADD, MODIFY, REMOVE, COMPLETE }
+
+    private final LocalDateTime timestamp;
+    private final ActionType actionType;
+    private final int taskId;
+
+    public Activity(LocalDateTime timestamp, ActionType actionType, int taskId) {
+        this.timestamp = timestamp;
+        this.actionType = actionType;
+        this.taskId = taskId;
+    }
+
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+
+    public ActionType getActionType() {
+        return actionType;
+    }
+
+    public int getTaskId() {
+        return taskId;
+    }
+
+    @Override
+    public String toString() {
+        return timestamp + " - " + actionType + " - Task ID: " + taskId;
+    }
+}
+
+
+package service;
+
+import model.Task;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Set;
+
+public interface TaskService {
+    int addTask(String description, LocalDate dueDate, Set<String> tags, LocalDate appearOn);
+    void updateTask(int id, String description, LocalDate dueDate, Set<String> tags);
+    void removeTask(int id);
+    void completeTask(int id);
+    List<Task> getActiveTasks(LocalDate date);
+    Task getTaskById(int id);
+}
+
+
+package service;
+
+import model.Task;
+import model.Activity;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
+
+public class TaskServiceImpl implements TaskService {
+    private final Map<Integer, Task> tasks = new HashMap<>();
+    private final LogService logService;
+    private int currentId = 1;
+
+    public TaskServiceImpl(LogService logService) {
+        this.logService = logService;
+    }
+
+    public int addTask(String description, LocalDate dueDate, Set<String> tags, LocalDate appearOn) {
+        int id = currentId++;
+        Task task = new Task(id, description, dueDate, tags, appearOn);
+        tasks.put(id, task);
+        logService.log(new Activity(LocalDateTime.now(), Activity.ActionType.ADD, id));
+        return id;
+    }
+
+    public void updateTask(int id, String description, LocalDate dueDate, Set<String> tags) {
+        Task task = tasks.get(id);
+        if (task != null) {
+            task.setDescription(description);
+            task.setDueDate(dueDate);
+            task.setTags(tags);
+            logService.log(new Activity(LocalDateTime.now(), Activity.ActionType.MODIFY, id));
+        }
+    }
+
+    public void removeTask(int id) {
+        if (tasks.containsKey(id)) {
+            tasks.remove(id);
+            logService.log(new Activity(LocalDateTime.now(), Activity.ActionType.REMOVE, id));
+        }
+    }
+
+    public void completeTask(int id) {
+        Task task = tasks.get(id);
+        if (task != null) {
+            task.markCompleted();
+            tasks.remove(id);
+            logService.log(new Activity(LocalDateTime.now(), Activity.ActionType.COMPLETE, id));
+        }
+    }
+
+    public List<Task> getActiveTasks(LocalDate date) {
+        List<Task> result = new ArrayList<>();
+        for (Task task : tasks.values()) {
+            if (!task.isCompleted() && !task.getAppearOnDate().isAfter(date)) {
+                result.add(task);
+            }
+        }
+        return result;
+    }
+
+    public Task getTaskById(int id) {
+        return tasks.get(id);
+    }
+
+    public Collection<Task> getAllTasks() {
+        return tasks.values();
+    }
+}
+
+
+package service;
+
+import model.Activity;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public interface LogService {
+    void log(Activity activity);
+    List<Activity> getLogsBetween(LocalDateTime from, LocalDateTime to);
+}
+
+
+package service;
+
+import model.Activity;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+public class LogServiceImpl implements LogService {
+    private final List<Activity> logs = new ArrayList<>();
+
+    public void log(Activity activity) {
+        logs.add(activity);
+    }
+
+    public List<Activity> getLogsBetween(LocalDateTime from, LocalDateTime to) {
+        List<Activity> result = new ArrayList<>();
+        for (Activity log : logs) {
+            if (!log.getTimestamp().isBefore(from) && !log.getTimestamp().isAfter(to)) {
+                result.add(log);
+            }
+        }
+        return result;
+    }
+}
+
+
+package service;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+
+public interface StatisticsService {
+    Map<String, Integer> generateStatistics(LocalDateTime from, LocalDateTime to);
+}
+
+
+package service;
+
+import model.Activity;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+public class StatisticsServiceImpl implements StatisticsService {
+    private final LogService logService;
+
+    public StatisticsServiceImpl(LogService logService) {
+        this.logService = logService;
+    }
+
+    public Map<String, Integer> generateStatistics(LocalDateTime from, LocalDateTime to) {
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("Added", 0);
+        stats.put("Modified", 0);
+        stats.put("Removed", 0);
+        stats.put("Completed", 0);
+        stats.put("Spilled", 0);
+
+        for (Activity log : logService.getLogsBetween(from, to)) {
+            switch (log.getActionType()) {
+                case ADD -> stats.computeIfPresent("Added", (k, v) -> v + 1);
+                case MODIFY -> stats.computeIfPresent("Modified", (k, v) -> v + 1);
+                case REMOVE -> stats.computeIfPresent("Removed", (k, v) -> v + 1);
+                case COMPLETE -> stats.computeIfPresent("Completed", (k, v) -> v + 1);
+            }
+        }
+
+        return stats;
+    }
+}
+
+
+package facade;
+
+import model.Activity;
+import model.Task;
+import service.*;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public class TodoFacade {
+    private final TaskServiceImpl taskService;
+    private final LogServiceImpl logService;
+    private final StatisticsServiceImpl statisticsService;
+
+    public TodoFacade() {
+        this.logService = new LogServiceImpl();
+        this.taskService = new TaskServiceImpl(logService);
+        this.statisticsService = new StatisticsServiceImpl(logService);
+    }
+
+    public int addTask(String desc, LocalDate due, Set<String> tags, LocalDate appearOn) {
+        return taskService.addTask(desc, due, tags, appearOn);
+    }
+
+    public void modifyTask(int id, String desc, LocalDate due, Set<String> tags) {
+        taskService.updateTask(id, desc, due, tags);
+    }
+
+    public void removeTask(int id) {
+        taskService.removeTask(id);
+    }
+
+    public void completeTask(int id) {
+        taskService.completeTask(id);
+    }
+
+    public List<Task> getActiveTasks(LocalDate date) {
+        return taskService.getActiveTasks(date);
+    }
+
+    public List<Activity> getActivityLogs(LocalDateTime from, LocalDateTime to) {
+        return logService.getLogsBetween(from, to);
+    }
+
+    public Map<String, Integer> getStats(LocalDateTime from, LocalDateTime to) {
+        return statisticsService.generateStatistics(from, to);
+    }
+}
+
+
+import facade.TodoFacade;
+import model.Task;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public class Main {
+    public static void main(String[] args) {
+        TodoFacade todo = new TodoFacade();
+
+        int id1 = todo.addTask("Finish project", LocalDate.now().plusDays(2), Set.of("work", "urgent"), LocalDate.now());
+        int id2 = todo.addTask("Buy groceries", LocalDate.now().plusDays(1), Set.of("personal"), LocalDate.now());
+
+        todo.modifyTask(id2, "Buy groceries and snacks", LocalDate.now().plusDays(1), Set.of("personal", "food"));
+        todo.completeTask(id1);
+
+        List<Task> tasks = todo.getActiveTasks(LocalDate.now());
+        System.out.println("\n--- Active Tasks ---");
+        for (Task t : tasks) {
+            System.out.println(t.getId() + ": " + t.getDescription());
+        }
+
+        System.out.println("\n--- Activity Log ---");
+        todo.getActivityLogs(LocalDateTime.now().minusDays(1), LocalDateTime.now())
+            .forEach(System.out::println);
+
+        System.out.println("\n--- Statistics ---");
+        Map<String, Integer> stats = todo.getStats(LocalDateTime.now().minusDays(1), LocalDateTime.now());
+        stats.forEach((k, v) -> System.out.println(k + ": " + v));
+    }
+}
+
+
+
+
+
