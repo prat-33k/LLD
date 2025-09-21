@@ -1,0 +1,268 @@
+3.Your organization has started a new tech blog with interesting tech stories and you’re responsible for
+  designing and implementing an in-memory search engine, supporting the search functionality on the blog content.
+
+  Requirements:
+  It should be possible to create a category in the search engine.
+  It should be possible to insert and delete documents in a given category.
+  It should be possible to search through documents for a search pattern in a given category. (Normal,FRequencyBased)
+  It should be possible to order the search results(Created,Updates).
+
+
+
+package com.blogsearchengine.model;
+
+import java.time.LocalDateTime;
+
+public class Document {
+    private final String id;
+    private String content;
+    private final LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    public Document(String id, String content) {
+        this.id = id;
+        this.content = content;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = this.createdAt;
+    }
+
+    public void updateContent(String content) {
+        this.content = content;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public String getId() { return id; }
+    public String getContent() { return content; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+}
+
+
+package com.blogsearchengine.model;
+
+import java.util.*;
+
+public class Category {
+    private final String name;
+    private final Map<String, Document> documents = new HashMap<>();
+
+    public Category(String name) {
+        this.name = name;
+    }
+
+    public void addDocument(Document doc) {
+        documents.put(doc.getId(), doc);
+    }
+
+    public void removeDocument(String id) {
+        documents.remove(id);
+    }
+
+    public Collection<Document> getAllDocuments() {
+        return documents.values();
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+
+package com.blogsearchengine.service.search;
+
+import com.blogsearchengine.model.Document;
+import java.util.Collection;
+import java.util.List;
+
+public interface SearchStrategy {
+    List<Document> search(String pattern, Collection<Document> documents);
+}
+
+
+package com.blogsearchengine.service.search;
+
+import com.blogsearchengine.model.Document;
+import java.util.*;
+
+public class NormalSearchStrategy implements SearchStrategy {
+    @Override
+    public List<Document> search(String pattern, Collection<Document> documents) {
+        List<Document> result = new ArrayList<>();
+        String lowerPattern = pattern.toLowerCase();
+        for (Document doc : documents) {
+            if (doc.getContent().toLowerCase().contains(lowerPattern)) {
+                result.add(doc);
+            }
+        }
+        return result;
+    }
+}
+
+
+package com.blogsearchengine.service.search;
+
+import com.blogsearchengine.model.Document;
+import java.util.*;
+
+public class FrequencySearchStrategy implements SearchStrategy {
+    @Override
+    public List<Document> search(String pattern, Collection<Document> documents) {
+        Map<Document, Integer> frequencyMap = new HashMap<>();
+        String lowerPattern = pattern.toLowerCase();
+
+        for (Document doc : documents) {
+            int frequency = countOccurrences(doc.getContent().toLowerCase(), lowerPattern);
+            if (frequency > 0) {
+                frequencyMap.put(doc, frequency);
+            }
+        }
+
+        List<Document> result = new ArrayList<>(frequencyMap.keySet());
+        result.sort((a, b) -> frequencyMap.get(b) - frequencyMap.get(a)); // Descending
+        return result;
+    }
+
+    private int countOccurrences(String text, String word) {
+        int count = 0, idx = 0;
+        while ((idx = text.indexOf(word, idx)) != -1) {
+            count++;
+            idx += word.length();
+        }
+        return count;
+    }
+}
+
+
+package com.blogsearchengine.service;
+
+import com.blogsearchengine.model.*;
+import com.blogsearchengine.service.search.*;
+
+import java.util.*;
+
+public class SearchEngineService {
+    private final Map<String, Category> categories = new HashMap<>();
+
+    public void createCategory(String name) {
+        categories.putIfAbsent(name, new Category(name));
+    }
+
+    public void deleteCategory(String name) {
+        categories.remove(name);
+    }
+
+    public void addDocument(String categoryName, Document doc) {
+        Category category = categories.get(categoryName);
+        if (category != null) {
+            category.addDocument(doc);
+        } else {
+            throw new IllegalArgumentException("Category does not exist.");
+        }
+    }
+
+    public void removeDocument(String categoryName, String docId) {
+        Category category = categories.get(categoryName);
+        if (category != null) {
+            category.removeDocument(docId);
+        }
+    }
+
+    public List<Document> search(String categoryName, String pattern, SearchStrategy strategy, Comparator<Document> sortBy) {
+        Category category = categories.get(categoryName);
+        if (category == null) {
+            return Collections.emptyList();
+        }
+
+        List<Document> results = strategy.search(pattern, category.getAllDocuments());
+        if (sortBy != null) {
+            results.sort(sortBy);
+        }
+
+        return results;
+    }
+}
+
+
+package com.blogsearchengine.controller;
+
+import com.blogsearchengine.model.Document;
+import com.blogsearchengine.service.SearchEngineService;
+import com.blogsearchengine.service.search.SearchStrategy;
+
+import java.util.Comparator;
+import java.util.List;
+
+public class SearchEngineController {
+    private final SearchEngineService searchService;
+
+    public SearchEngineController(SearchEngineService service) {
+        this.searchService = service;
+    }
+
+    public void createCategory(String name) {
+        searchService.createCategory(name);
+    }
+
+    public void deleteCategory(String name) {
+        searchService.deleteCategory(name);
+    }
+
+    public void addDocument(String category, String id, String content) {
+        Document doc = new Document(id, content);
+        searchService.addDocument(category, doc);
+    }
+
+    public void removeDocument(String category, String docId) {
+        searchService.removeDocument(category, docId);
+    }
+
+    public List<Document> search(String category, String pattern, SearchStrategy strategy, Comparator<Document> sortBy) {
+        return searchService.search(category, pattern, strategy, sortBy);
+    }
+}
+
+
+package com.blogsearchengine.util;
+
+import com.blogsearchengine.model.Document;
+import java.util.Comparator;
+
+public class DocumentComparators {
+    public static final Comparator<Document> BY_CREATED_AT = Comparator.comparing(Document::getCreatedAt);
+    public static final Comparator<Document> BY_UPDATED_AT = Comparator.comparing(Document::getUpdatedAt);
+}
+
+
+import com.blogsearchengine.controller.SearchEngineController;
+import com.blogsearchengine.service.SearchEngineService;
+import com.blogsearchengine.service.search.*;
+import com.blogsearchengine.util.DocumentComparators;
+import com.blogsearchengine.model.Document;
+
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        SearchEngineService service = new SearchEngineService();
+        SearchEngineController controller = new SearchEngineController(service);
+
+        controller.createCategory("Tech");
+
+        controller.addDocument("Tech", "1", "Java is a high-level, class-based, object-oriented language.");
+        controller.addDocument("Tech", "2", "Python emphasizes simplicity and readability.");
+        controller.addDocument("Tech", "3", "Java provides strong typing and performance.");
+
+        SearchStrategy normal = new NormalSearchStrategy();
+        SearchStrategy freq = new FrequencySearchStrategy();
+
+        System.out.println("=== Normal Search ===");
+        List<Document> normalResults = controller.search("Tech", "Java", normal, DocumentComparators.BY_CREATED_AT);
+        normalResults.forEach(doc -> System.out.println(doc.getContent()));
+
+        System.out.println("\n=== Frequency-Based Search ===");
+        List<Document> freqResults = controller.search("Tech", "Java", freq, DocumentComparators.BY_UPDATED_AT);
+        freqResults.forEach(doc -> System.out.println(doc.getContent()));
+    }
+}
+
+
