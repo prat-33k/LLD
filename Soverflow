@@ -744,3 +744,9 @@ public class StackOverflowLLD_V3 {
         System.out.println("Charlie reputation: " + charlie.getReputation());
     }
 }
+Comments:
+
+Club similar entities into an abstract class(Post) and then use super keyword inside that entity constructor.
+Implement strategies wherever possible,
+Each service class that can change some common entity should be singleton in general
+Use map <id, entity> in service classes for in memory storage, also dont shy away from using different services inside one service
