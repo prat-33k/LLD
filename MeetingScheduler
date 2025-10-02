@@ -1,0 +1,413 @@
+Users can book any meeting room from (start time to end time) if the room is available.
+If a room is not available, it should be shown at that moment only.
+All the participants of a meeting should receive a notification related to the same.
+Store the history of all the meetings scheduled.
+Users can see all the available meeting rooms for a particular time slot ( can be neglected for implementation but is good to discuss)
+
+
+
+
+
+Entity Classes
+   User – represents organizer/participant.
+   MeetingRoom – represents a bookable room (default: table & chairs).
+   Booking – represents a scheduled meeting for a room, with optional runtime requirements.
+   Calendar – tracks dates/times.
+   Notification – represents a notification to participants.
+   HistoryRecord – represents stored record of a meeting.
+
+Functions from requirements (excluding getters/setters)
+  bookRoom(startTime, endTime, roomId, participants, optionalFeatures)
+  Book a room if available; assign optional features if requested.
+  checkAvailability(roomId, startTime, endTime)
+  Check if room is free in that time slot.
+  sendNotification(notificationType, booking)
+  Notify all participants about the booking.
+  storeMeetingHistory(booking)
+  Store booking details for history.
+  getAvailableRooms(startTime, endTime)
+
+Singleton candidates (shared state)
+  RoomManager (Singleton)
+  Shared list of meeting rooms and their schedules.
+  checkAvailability, getAvailableRooms (optional).
+
+BookingManager (Singleton)
+  Shared list of bookings.
+  Functions: bookRoom, storeMeetingHistory.
+
+NotificationService (Singleton)
+  Shared notification sending logic.
+
+Strategy Pattern
+  Task: Sending different types of notifications.
+  Interface: NotificationStrategy.
+
+Implementations:
+  EmailNotification
+  SMSNotification
+  PushNotification
+
+NotificationFactory.
+
+Builder Pattern
+  Why: Booking can have many optional requirements at booking time (TV, whiteboard, AC).
+  BookingBuilder allows us to set only the features needed without huge constructors.
+
+Example:
+Booking booking = new BookingBuilder(roomId, startTime, endTime, participants)
+                      .withTV()
+                      .withWhiteboard()
+                      .build();
+
+Decorator Pattern
+  Why: Builder only tells “what” optional features are requested,
+  but Decorator is used to dynamically enhance the booked room with those features at runtime.
+
+Structure:
+  RoomFeatures (interface) — defines getDescription() and getCost() (if needed).
+  BasicRoom — base room with table & chairs.
+
+Decorators:
+  TVFeature
+  WhiteboardFeature
+  ACFeature
+
+Observer Pattern
+  BookingManager acts as the subject.
+
+Observers:
+  NotificationService → sends notifications to all participants.
+  HistoryService → stores booking in history.
+  Triggered after successful booking.
+
+When booking, wrap the BasicRoom in decorators based on builder-selected options.
+
+
+                   ┌─────────────────────┐
+                   │       User          │
+                   ├─────────────────────┤
+                   │- userId: String     │
+                   │- name: String       │
+                   │- email: String      │
+                   ├─────────────────────┤
+                   │+ getBookings()      │
+                   └─────────────────────┘
+                              ▲
+                              │ 1..*
+                              │
+                   ┌─────────────────────┐
+                   │     Booking         │
+                   ├─────────────────────┤
+                   │- bookingId: String  │
+                   │- startTime: DateTime│
+                   │- endTime: DateTime  │
+                   │- participants: List │
+                   │- room: MeetingRoom  │
+                   ├─────────────────────┤
+                   │+ notifyParticipants()│
+                   └─────────────────────┘
+                              ▲
+                              │ built from
+                              │
+              ┌────────────────────────────────┐
+              │     BookingRequestBuilder       │  <<Builder>>
+              ├────────────────────────────────┤
+              │- startTime: DateTime            │
+              │- endTime: DateTime              │
+              │- participants: List<User>       │
+              │- tv: boolean                    │
+              │- whiteboard: boolean            │
+              │- ac: boolean                    │
+              ├────────────────────────────────┤
+              │+ setStartTime(DateTime)         │
+              │+ setEndTime(DateTime)           │
+              │+ addParticipant(User)           │
+              │+ requireTV()                    │
+              │+ requireWhiteboard()            │
+              │+ requireAC()                    │
+              │+ build(): BookingRequest        │
+              └────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │   BookingRequest    │
+                   ├─────────────────────┤
+                   │- startTime          │
+                   │- endTime            │
+                   │- participants       │
+                   │- tv                 │
+                   │- whiteboard         │
+                   │- ac                 │
+                   └─────────────────────┘
+
+          ┌──────────────────────┐
+          │   MeetingRoom        │ <<Component>>
+          ├──────────────────────┤
+          │- roomId: String      │
+          │- name: String        │
+          │- capacity: int       │
+          ├──────────────────────┤
+          │+ book(...)           │
+          │+ isAvailable(...)    │
+          └──────────────────────┘
+                     ▲
+   ┌─────────────────┼───────────────────┐
+   │                 │                   │
+┌────────────────┐   ┌────────────────┐  ┌───────────────────┐
+│ TVDecorator    │   │ WhiteboardDec. │  │ ACDecorator        │ <<Decorator>>
+├────────────────┤   ├────────────────┤  ├───────────────────┤
+│- wrappedRoom   │   │- wrappedRoom   │  │- wrappedRoom       │
+├────────────────┤   ├────────────────┤  ├───────────────────┤
+│+ book(...)     │   │+ book(...)     │  │+ book(...)         │
+└────────────────┘   └────────────────┘  └───────────────────┘
+
+    ┌───────────────────────┐
+    │ CalendarService       │
+    ├───────────────────────┤
+    │+ checkAvailability(...)│
+    │+ addBooking(...)       │
+    └───────────────────────┘
+
+    ┌───────────────────────┐
+    │ NotificationService   │
+    ├───────────────────────┤
+    │+ sendNotification(...) │
+    └───────────────────────┘
+
+
+
+
+import java.util.*;
+
+// ===== Entity: MeetingRoom =====
+class MeetingRoom {
+    private int roomId;
+    private String name;
+
+    public MeetingRoom(int roomId, String name) {
+        this.roomId = roomId;
+        this.name = name;
+    }
+
+    public int getRoomId() {
+        return roomId;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+// ===== Notification Strategy (Strategy Pattern) =====
+interface NotificationStrategy {
+    void sendNotification(String recipient, String message);
+}
+
+class EmailNotification implements NotificationStrategy {
+    public void sendNotification(String recipient, String message) {
+        System.out.println("Email to " + recipient + ": " + message);
+    }
+}
+
+class SMSNotification implements NotificationStrategy {
+    public void sendNotification(String recipient, String message) {
+        System.out.println("SMS to " + recipient + ": " + message);
+    }
+}
+
+class PushNotification implements NotificationStrategy {
+    public void sendNotification(String recipient, String message) {
+        System.out.println("Push to " + recipient + ": " + message);
+    }
+}
+
+// ===== Observer Pattern (Participant is Observer) =====
+interface Observer {
+    void update(String message);
+}
+
+class Participant implements Observer {
+    private String name;
+    private NotificationStrategy strategy;
+
+    public Participant(String name, NotificationStrategy strategy) {
+        this.name = name;
+        this.strategy = strategy;
+    }
+
+    @Override
+    public void update(String message) {
+        strategy.sendNotification(name, message);
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+// ===== Entity: Booking (Builder Pattern) =====
+class Booking {
+    private MeetingRoom room;
+    private Date startTime;
+    private Date endTime;
+    private List<Participant> participants;
+    private List<String> features;
+
+    private Booking(Builder builder) {
+        this.room = builder.room;
+        this.startTime = builder.startTime;
+        this.endTime = builder.endTime;
+        this.participants = builder.participants;
+        this.features = builder.features;
+    }
+
+    public MeetingRoom getRoom() {
+        return room;
+    }
+
+    public Date getStartTime() {
+        return startTime;
+    }
+
+    public Date getEndTime() {
+        return endTime;
+    }
+
+    public List<Participant> getParticipants() {
+        return participants;
+    }
+
+    public List<String> getFeatures() {
+        return features;
+    }
+
+    // ===== Booking Builder =====
+    public static class Builder {
+        private MeetingRoom room;
+        private Date startTime;
+        private Date endTime;
+        private List<Participant> participants = new ArrayList<>();
+        private List<String> features = new ArrayList<>();
+
+        public Builder(MeetingRoom room, Date startTime, Date endTime) {
+            this.room = room;
+            this.startTime = startTime;
+            this.endTime = endTime;
+        }
+
+        public Builder addParticipant(Participant participant) {
+            this.participants.add(participant);
+            return this;
+        }
+
+        public Builder requireTV() {
+            features.add("TV");
+            return this;
+        }
+
+        public Builder requireWhiteboard() {
+            features.add("Whiteboard");
+            return this;
+        }
+
+        public Builder requireAC() {
+            features.add("AC");
+            return this;
+        }
+
+        public Booking build() {
+            return new Booking(this);
+        }
+    }
+}
+
+// ===== Booking Service =====
+class BookingService {
+    private List<MeetingRoom> rooms = new ArrayList<>();
+    private List<Booking> bookings = new ArrayList<>();
+
+    public void addRoom(MeetingRoom room) {
+        rooms.add(room);
+    }
+
+    public boolean isRoomAvailable(MeetingRoom room, Date start, Date end) {
+        for (Booking b : bookings) {
+            if (b.getRoom().getRoomId() == room.getRoomId() &&
+                !(end.before(b.getStartTime()) || start.after(b.getEndTime()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void bookRoom(Booking booking) {
+        if (isRoomAvailable(booking.getRoom(), booking.getStartTime(), booking.getEndTime())) {
+            bookings.add(booking);
+
+            // Log booking confirmation
+            System.out.println("✅ Booking confirmed for room: " + booking.getRoom().getName());
+            System.out.println("  ➤ Time: " + booking.getStartTime() + " to " + booking.getEndTime());
+            System.out.println("  ➤ Features: " + String.join(", ", booking.getFeatures()));
+
+            // Notify participants (Observer)
+            for (Participant p : booking.getParticipants()) {
+                p.update("Your meeting is booked in " + booking.getRoom().getName() +
+                        " from " + booking.getStartTime() + " to " + booking.getEndTime());
+            }
+        } else {
+            System.out.println("❌ Room " + booking.getRoom().getName() + " is not available.");
+        }
+    }
+
+    public List<MeetingRoom> getAvailableRooms(Date start, Date end) {
+        List<MeetingRoom> available = new ArrayList<>();
+        for (MeetingRoom r : rooms) {
+            if (isRoomAvailable(r, start, end)) {
+                available.add(r);
+            }
+        }
+        return available;
+    }
+}
+
+// ===== Client Code =====
+public class MeetingRoomBookingSystem {
+    public static void main(String[] args) {
+        BookingService bookingService = new BookingService();
+
+        // Add meeting rooms
+        MeetingRoom r1 = new MeetingRoom(1, "Room A");
+        MeetingRoom r2 = new MeetingRoom(2, "Room B");
+        bookingService.addRoom(r1);
+        bookingService.addRoom(r2);
+
+        // Define time slots
+        Date now = new Date();
+        Date start = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+        Date end = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours from now
+
+        // Participants
+        Participant alice = new Participant("Alice", new EmailNotification());
+        Participant bob = new Participant("Bob", new SMSNotification());
+        Participant charlie = new Participant("Charlie", new PushNotification());
+
+        // Booking with TV and AC
+        Booking booking = new Booking.Builder(r1, start, end)
+                .addParticipant(alice)
+                .addParticipant(bob)
+                .addParticipant(charlie)
+                .requireTV()
+                .requireAC()
+                .build();
+
+        // Book room
+        bookingService.bookRoom(booking);
+
+        // Check available rooms
+        System.out.println("\n🟢 Available rooms during that time slot:");
+        for (MeetingRoom room : bookingService.getAvailableRooms(start, end)) {
+            System.out.println(" - " + room.getName());
+        }
+    }
+}
