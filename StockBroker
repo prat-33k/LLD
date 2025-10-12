@@ -1,0 +1,648 @@
+stocn broker low level design:
+
+The online stock brokerage system should allow users to create and manage their trading accounts.
+Users should be able to buy and sell stocks, as well as view their portfolio and transaction history.
+The system should provide real-time stock quotes and market data to users.
+The system should handle order placement, execution, and settlement processes.
+The system should enforce various business rules and validations, such as checking account balances and stock availability.
+The system should handle concurrent user requests and ensure data consistency and integrity.
+The system should be scalable and able to handle a large number of users and transactions.
+The system should be secure and protect sensitive user information.
+
+
+thought process:
+though process:
+entities:
+ user
+ stock
+ transaction
+ account
+ 
+services:
+ createAccount;
+ buyStock
+ sellStock
+ viewPortfolio
+ viewTransactionHistory
+ viewStocks
+
+
+patterns: 
+ 1. Singleton for service functions like buyStock and sellStock
+ 2. observer pattern for notifying users when stock price changes.
+
+
+                          ┌──────────────────────────┐
+                          │        Stock             │
+                          ├──────────────────────────┤
+                          │ - id: int                │
+                          │ - name: String           │
+                          │ - price: int             │
+                          │ - quantity: int          │
+                          ├──────────────────────────┤
+                          │ + toString(): String     │
+                          └──────────────────────────┘
+
+                          ┌──────────────────────────┐
+                          │      Transaction         │
+                          ├──────────────────────────┤
+                          │ - id: int                │
+                          │ - account: Account       │
+                          │ - stock: Stock           │
+                          │ - shares: int            │
+                          │ - amount: int            │
+                          ├──────────────────────────┤
+                          │ + toString(): String     │
+                          └──────────────────────────┘
+                                   ▲
+                                   │ 1..*
+                                   │
+                          ┌──────────────────────────┐
+                          │        Account           │
+                          ├──────────────────────────┤
+                          │ - id: int                │
+                          │ - balance: int           │
+                          │ - portfolio: Map<Stock,int>│
+                          │ - transactions: List<Trans>│
+                          ├──────────────────────────┤
+                          │ + viewPortfolio()        │
+                          │ + addStockInPortfolio()  │
+                          │ + removeStockFromPortfolio()│
+                          │ + addTransaction()       │
+                          │ + viewTransactions()     │
+                          └──────────────────────────┘
+                                   ▲
+                                   │ 1
+                                   │
+                          ┌──────────────────────────┐
+                          │          User            │
+                          ├──────────────────────────┤
+                          │ - id: int                │
+                          │ - name: String           │
+                          │ - account: Account       │
+                          ├──────────────────────────┤
+                          │ + createAccount()        │
+                          │ + getAccount(): Account  │
+                          │ + viewPortfolio()        │
+                          │ + viewTransactions()     │
+                          └──────────────────────────┘
+
+
+   ┌─────────────────────────────┐         ┌──────────────────────────┐
+   │       StockObserver (IF)    │◄────────┤      UserNotifier        │
+   ├─────────────────────────────┤         ├──────────────────────────┤
+   │ + update(stock: Stock)      │         │ - user: User             │
+   └─────────────────────────────┘         ├──────────────────────────┤
+                                            │ + update(stock: Stock)   │
+                                            └──────────────────────────┘
+
+                          ┌──────────────────────────┐
+                          │      StockManager        │ (Singleton)
+                          ├──────────────────────────┤
+                          │ - instance: StockManager │
+                          │ - stocks: List<Stock>    │
+                          │ - observers: List<StockObserver>│
+                          ├──────────────────────────┤
+                          │ + getInstance(): StockManager │
+                          │ + addStock()             │
+                          │ + registerObserver()     │
+                          │ + updateStockPrice()     │
+                          │ + buyStock()             │
+                          │ + sellStock()            │
+                          │ + viewStockList()        │
+                          └──────────────────────────┘
+
+
+
+import java.util.*;
+
+// ==================== ENTITY CLASSES ====================
+
+class Stock {
+    public int id;
+    public String name;
+    public int price;
+    public int quantity;
+
+    Stock(int id, String name, int price, int quantity) {
+        this.id = id;
+        this.name = name;
+        this.price = price;
+        this.quantity = quantity;
+    }
+
+    @Override
+    public String toString() {
+        return id + " | " + name + " | Price: " + price + " | Qty: " + quantity;
+    }
+}
+
+class Transaction {
+    public int id;
+    public Account account;
+    public Stock stock;
+    public int shares;
+    public int amount;
+
+    Transaction(Account account, Stock stock, int shares, int amount) {
+        this.id = new Random().nextInt(100000);
+        this.account = account;
+        this.stock = stock;
+        this.shares = shares;
+        this.amount = amount;
+    }
+
+    @Override
+    public String toString() {
+        return "Txn#" + id + " " + stock.name + " " + shares + " shares @ " + stock.price + " = " + amount;
+    }
+}
+
+class Account {
+    public int id;
+    public int balance;
+    private Map<Stock, Integer> portfolio;
+    private List<Transaction> transactions;
+
+    Account(int id, int initialBalance) {
+        this.id = id;
+        this.balance = initialBalance;
+        this.portfolio = new HashMap<>();
+        this.transactions = new ArrayList<>();
+    }
+
+    public void viewPortfolio() {
+        System.out.println("Portfolio of Account " + id);
+        for (Map.Entry<Stock, Integer> entry : portfolio.entrySet()) {
+            System.out.println(entry.getKey().name + " -> " + entry.getValue() + " shares");
+        }
+    }
+
+    public void addStockInPortfolio(Stock stock, int quantity) {
+        portfolio.put(stock, portfolio.getOrDefault(stock, 0) + quantity);
+    }
+
+    public void removeStockFromPortfolio(Stock stock, int quantity) {
+        if (portfolio.containsKey(stock)) {
+            int current = portfolio.get(stock);
+            if (current <= quantity) portfolio.remove(stock);
+            else portfolio.put(stock, current - quantity);
+        }
+    }
+
+    public void addTransaction(Transaction transaction) {
+        transactions.add(transaction);
+    }
+
+    public void viewTransactions() {
+        for (Transaction txn : transactions) {
+            System.out.println(txn);
+        }
+    }
+}
+
+class User {
+    public int id;
+    public String name;
+    private Account account;
+
+    User(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public void createAccount(int initialBalance) {
+        this.account = new Account(id, initialBalance);
+    }
+
+    public Account getAccount() {
+        return account;
+    }
+
+    public void viewPortfolio() {
+        account.viewPortfolio();
+    }
+
+    public void viewTransactions() {
+        account.viewTransactions();
+    }
+}
+
+// ==================== OBSERVER PATTERN ====================
+
+interface StockObserver {
+    void update(Stock stock);
+}
+
+class UserNotifier implements StockObserver {
+    private User user;
+    UserNotifier(User user) {
+        this.user = user;
+    }
+    @Override
+    public void update(Stock stock) {
+        System.out.println("Notifying " + user.name + ": Stock " + stock.name + " new price: " + stock.price);
+    }
+}
+
+// ==================== SINGLETON SERVICE ====================
+
+class StockManager {
+    private static StockManager instance;
+    private List<Stock> stocks;
+    private List<StockObserver> observers;
+
+    private StockManager() {
+        this.stocks = new ArrayList<>();
+        this.observers = new ArrayList<>();
+    }
+
+    public static StockManager getInstance() {
+        if (instance == null) instance = new StockManager();
+        return instance;
+    }
+
+    public void addStock(Stock stock) {
+        stocks.add(stock);
+    }
+
+    public void registerObserver(StockObserver observer) {
+        observers.add(observer);
+    }
+
+    private void notifyAllObservers(Stock stock) {
+        for (StockObserver obs : observers) {
+            obs.update(stock);
+        }
+    }
+
+    public void updateStockPrice(int stockId, int newPrice) {
+        for (Stock stock : stocks) {
+            if (stock.id == stockId) {
+                stock.price = newPrice;
+                notifyAllObservers(stock);
+                break;
+            }
+        }
+    }
+
+    public void buyStock(Account account, int stockId, int shares) throws Exception {
+        for (Stock stock : stocks) {
+            if (stock.id == stockId) {
+                int cost = shares * stock.price;
+                if (account.balance < cost) throw new Exception("Not enough balance!");
+                if (stock.quantity < shares) throw new Exception("Not enough stock available!");
+
+                stock.quantity -= shares;
+                account.addStockInPortfolio(stock, shares);
+                account.balance -= cost;
+                account.addTransaction(new Transaction(account, stock, shares, cost));
+                break;
+            }
+        }
+    }
+
+    public void sellStock(Account account, int stockId, int shares) throws Exception {
+        for (Stock stock : stocks) {
+            if (stock.id == stockId) {
+                stock.quantity += shares;
+                int revenue = shares * stock.price;
+                account.removeStockFromPortfolio(stock, shares);
+                account.balance += revenue;
+                account.addTransaction(new Transaction(account, stock, shares, revenue));
+                break;
+            }
+        }
+    }
+
+    public void viewStockList() {
+        for (Stock stock : stocks) {
+            System.out.println(stock);
+        }
+    }
+}
+
+// ==================== CLIENT CODE ====================
+
+public class Main {
+    public static void main(String[] args) {
+        try {
+            // Create stock manager (Singleton)
+            StockManager manager = StockManager.getInstance();
+
+            // Add stocks
+            Stock s1 = new Stock(1, "AAPL", 150, 100);
+            Stock s2 = new Stock(2, "GOOG", 2800, 50);
+            manager.addStock(s1);
+            manager.addStock(s2);
+
+            // Create user + account
+            User u1 = new User(1, "Alice");
+            u1.createAccount(10000);
+
+            // Register for stock notifications
+            manager.registerObserver(new UserNotifier(u1));
+
+            // Show stocks
+            manager.viewStockList();
+
+            // Buy stock
+            manager.buyStock(u1.getAccount(), 1, 10);
+
+            // Sell stock
+            manager.sellStock(u1.getAccount(), 1, 5);
+
+            // View portfolio
+            u1.viewPortfolio();
+
+            // View transactions
+            u1.viewTransactions();
+
+            // Update stock price -> triggers Observer notification
+            manager.updateStockPrice(1, 160);
+
+
+-------------------------------------My way---------------------------------------------------------------------------
+
+import java.util.*;
+
+// -------------------- Stock --------------------
+class Stock {
+    private int id;
+    private String name;
+    private double price;
+    private int shares;
+
+    public Stock(int id, String name, double price, int shares) {
+        this.id = id;
+        this.name = name;
+        this.price = price;
+        this.shares = shares;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public double getPrice() { return price; }
+    public int getShares() { return shares; }
+
+    public void setPrice(double price) {
+        this.price = price;
+    }
+
+    public void setShares(int shares) {
+        this.shares = shares;
+    }
+
+    @Override
+    public String toString() {
+        return name + " - $" + price + " (" + shares + " shares)";
+    }
+}
+
+// -------------------- Transaction --------------------
+class Transaction {
+    private int id;
+    private int shares;
+    private Stock stock;
+    private User user;
+
+    public Transaction(int id, int shares, Stock stock, User user) {
+        this.id = id;
+        this.shares = shares;
+        this.stock = stock;
+        this.user = user;
+    }
+
+    public String toString() {
+        return "Transaction{id=" + id + ", user=" + user.getName() +
+                ", stock=" + stock.getName() + ", shares=" + shares + "}";
+    }
+}
+
+// -------------------- User --------------------
+class User {
+    private int id;
+    private String name;
+    private Map<Stock, Integer> portfolio;
+    private List<Transaction> transactions;
+
+    public User(int id, String name) {
+        this.id = id;
+        this.name = name;
+        this.portfolio = new HashMap<>();
+        this.transactions = new ArrayList<>();
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public Map<Stock, Integer> getPortfolio() { return portfolio; }
+    public List<Transaction> getTransactions() { return transactions; }
+
+    public void addTransaction(Transaction t) {
+        transactions.add(t);
+    }
+
+    public void addToPortfolio(Stock stock, int shares) {
+        portfolio.put(stock, portfolio.getOrDefault(stock, 0) + shares);
+    }
+
+    public void removeFromPortfolio(Stock stock, int shares) {
+        portfolio.put(stock, portfolio.getOrDefault(stock, 0) - shares);
+        if (portfolio.get(stock) <= 0) portfolio.remove(stock);
+    }
+
+    @Override
+    public String toString() {
+        return "User{id=" + id + ", name=" + name + "}";
+    }
+}
+
+// -------------------- Observer Pattern --------------------
+interface Observer {
+    void notify(String message);
+}
+
+class UserNotifier implements Observer {
+    private User user;
+
+    public UserNotifier(User user) {
+        this.user = user;
+    }
+
+    @Override
+    public void notify(String message) {
+        System.out.println("Notification to " + user.getName() + ": " + message);
+    }
+}
+
+// -------------------- Stock Service --------------------
+class StockService {
+    private Map<Integer, Stock> stockById = new HashMap<>();
+    private Map<String, Stock> stockByName = new HashMap<>();
+
+    public void addStock(Stock stock) {
+        stockById.put(stock.getId(), stock);
+        stockByName.put(stock.getName(), stock);
+    }
+
+    public Stock getStockById(int id) {
+        return stockById.get(id);
+    }
+
+    public Stock getStockByName(String name) {
+        return stockByName.get(name);
+    }
+
+    public void updatePrice(String name, double newPrice) {
+        Stock stock = stockByName.get(name);
+        if (stock != null) {
+            stock.setPrice(newPrice);
+        }
+    }
+}
+
+// -------------------- Transaction Service --------------------
+class TransactionService {
+    private static int transactionCounter = 1;
+
+    public Transaction buyStock(User user, Stock stock, int shares) {
+        Transaction t = new Transaction(transactionCounter++, shares, stock, user);
+        user.addTransaction(t);
+        user.addToPortfolio(stock, shares);
+        System.out.println(user.getName() + " bought " + shares + " shares of " + stock.getName());
+        return t;
+    }
+
+    public Transaction sellStock(User user, Stock stock, int shares) {
+        Transaction t = new Transaction(transactionCounter++, -shares, stock, user);
+        user.addTransaction(t);
+        user.removeFromPortfolio(stock, shares);
+        System.out.println(user.getName() + " sold " + shares + " shares of " + stock.getName());
+        return t;
+    }
+}
+
+// -------------------- User Service --------------------
+class UserService {
+    private Map<Integer, User> users = new HashMap<>();
+
+    public void registerUser(User user) {
+        users.put(user.getId(), user);
+    }
+
+    public User getUserById(int id) {
+        return users.get(id);
+    }
+
+    public void viewPortfolio(User user) {
+        System.out.println("Portfolio of " + user.getName() + ": " + user.getPortfolio());
+    }
+
+    public void viewTransactions(User user) {
+        System.out.println("Transactions for " + user.getName() + ": " + user.getTransactions());
+    }
+}
+
+// -------------------- Facade (Singleton Manager) --------------------
+class StockBrokerFacade {
+    private static StockBrokerFacade instance;
+
+    private StockService stockService;
+    private TransactionService transactionService;
+    private UserService userService;
+    private List<Observer> observers;
+
+    private StockBrokerFacade() {
+        stockService = new StockService();
+        transactionService = new TransactionService();
+        userService = new UserService();
+        observers = new ArrayList<>();
+    }
+
+    public static synchronized StockBrokerFacade getInstance() {
+        if (instance == null) {
+            instance = new StockBrokerFacade();
+        }
+        return instance;
+    }
+
+    public void addStock(Stock stock) {
+        stockService.addStock(stock);
+    }
+
+    public void registerUser(User user) {
+        userService.registerUser(user);
+        observers.add(new UserNotifier(user));
+    }
+
+    public void buyStock(User user, String stockName, int shares) {
+        Stock stock = stockService.getStockByName(stockName);
+        if (stock != null) {
+            transactionService.buyStock(user, stock, shares);
+        }
+    }
+
+    public void sellStock(User user, String stockName, int shares) {
+        Stock stock = stockService.getStockByName(stockName);
+        if (stock != null) {
+            transactionService.sellStock(user, stock, shares);
+        }
+    }
+
+    public void updateStockPrice(String stockName, double newPrice) {
+        stockService.updatePrice(stockName, newPrice);
+        notifyUsers("Stock " + stockName + " new price: $" + newPrice);
+    }
+
+    private void notifyUsers(String message) {
+        for (Observer observer : observers) {
+            observer.notify(message);
+        }
+    }
+}
+
+// -------------------- Main --------------------
+public class Main {
+    public static void main(String[] args) {
+        StockBrokerFacade broker = StockBrokerFacade.getInstance();
+
+        User u1 = new User(1, "Alice");
+        User u2 = new User(2, "Bob");
+
+        broker.registerUser(u1);
+        broker.registerUser(u2);
+
+        Stock s1 = new Stock(1, "AAPL", 150.0, 1000);
+        broker.addStock(s1);
+
+        broker.buyStock(u1, "AAPL", 10);
+        broker.sellStock(u1, "AAPL", 5);
+
+        broker.updateStockPrice("AAPL", 155.0);
+
+        broker.updateStockPrice("AAPL", 145.0);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+}
